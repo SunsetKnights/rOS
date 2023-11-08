@@ -7,13 +7,15 @@ mod sbi_services;   //提供调用sbi函数的功能
 mod console;        //提供屏幕打印的功能
 
 use core::arch::global_asm;
+
+use crate::sbi_services::shutdown;
 global_asm!(include_str!("entry.asm"));
 
 #[no_mangle] //告诉编译器不要乱改名字，不然entry.asm中找不到入口点
 pub fn rust_main() -> ! {
     clean_bss();
     println!("hello, world!");
-    panic!("Shutdown machine!")
+    shutdown();
 }
 
 fn clean_bss() {
