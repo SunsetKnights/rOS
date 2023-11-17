@@ -1,6 +1,6 @@
 mod context;
 
-use crate::syscall::syscall;
+use crate::{println, syscall::syscall};
 pub use context::TrapContext;
 use core::arch::global_asm;
 use riscv::register::{
