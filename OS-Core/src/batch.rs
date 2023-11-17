@@ -1,4 +1,4 @@
-use crate::trap::TrapContext;
+use crate::{println, trap::TrapContext};
 
 const USER_STACK_SIZE: usize = 4096 * 2;
 const KERNEL_STACK_SIZE: usize = 4096 * 2;
@@ -47,4 +47,28 @@ struct AppManager {
     current_app: usize,
     // why MAX_APP_NUM plus 1??????
     app_start: [usize; MAX_APP_NUM + 1],
+}
+
+impl AppManager {
+    pub fn print_app_info(&self) {
+        println!("[kernel] app quantity: {}", self.num_app);
+        for i in 0..self.num_app {
+            println!(
+                "[kernel] app_{} memory:[{:#x}, {:#x})",
+                i,
+                self.app_start[i],
+                self.app_start[i + 1]
+            );
+        }
+    }
+
+    fn load_app(&self, app_id: usize) {}
+
+    fn get_current_app(&self) -> usize {
+        self.current_app
+    }
+
+    fn move_to_next_app(&mut self) {
+        self.current_app += 1
+    }
 }
