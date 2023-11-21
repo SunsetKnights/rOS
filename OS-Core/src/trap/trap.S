@@ -32,7 +32,7 @@ __savetrapsreg:
     csrr x1, sepc
     sd x1, 33*8(sp)
     # save sscratch (user stack pointer)
-    curr x1, sscratch
+    csrr x1, sscratch
     sd x1, 2*8(sp)
     # set input argument of trap_handler(context: &mut TrapContext)
     # actually a0 is the x10, it's the first parameter in riscv function call, also, return value will put in this register too
@@ -55,7 +55,7 @@ __restoretrapreg:
     ld x3, 3*8(sp)
     .set n,5
     .rept 27
-        LOAD_GP %n
+        LOAD_REG %n
         .set n, n+1
     .endr
     # restore system stack
