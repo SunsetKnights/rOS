@@ -15,6 +15,8 @@ const SBI_SHUTDOWN: usize = 0;
 
 use core::arch::asm;
 
+use crate::timer;
+
 #[inline(always)]
 // 一个调用sbi服务的函数
 // service_type表示请求服务的i类型，arg0-arg2表示三个参数，返回值会被放入arg0中
@@ -42,4 +44,9 @@ pub fn console_putchar(c: usize) {
 pub fn shutdown() -> ! {
     sbi_call(SRST_EXTENSION, SBI_SHUTDOWN, 0, 0, 0);
     panic!("shutdown command executed!");
+}
+
+/// set value of mtimecmp register
+pub fn set_timer(timer:usize){
+    sbi_rt::set_timer(timer as _);
 }
