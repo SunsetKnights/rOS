@@ -40,14 +40,13 @@ __savetrapsreg:
     call trap_handler
 
 __restoretrapreg:
-    mv sp, a0
     # restore sepc
     ld x1, 33*8(sp)
     csrw sepc, x1
     # restore sstatus
     ld x1, 32*8(sp)
     csrw sstatus, x1
-    # restore sscratch
+    # restore sscratch (user stack sp)
     ld x1, 2*8(sp)
     csrw sscratch, x1
     # restore x1,x3,x5-x31

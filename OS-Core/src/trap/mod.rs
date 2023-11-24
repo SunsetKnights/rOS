@@ -1,11 +1,17 @@
 mod context;
 
-use crate::{println, syscall::syscall, batch::run_next_app};
+use crate::{
+    println,
+    syscall::syscall,
+    task::{called_system_call, exit_current_and_run_next, suspended_current_and_run_next},
+    timer::set_next_trigger,
+};
 pub use context::TrapContext;
 use core::arch::global_asm;
 use riscv::register::{
+    scause::Interrupt,
     scause::{self, Exception, Trap},
-    stval, stvec,
+    sie, stval, stvec,
     utvec::TrapMode,
 };
 
@@ -23,6 +29,13 @@ pub fn init() {
     }
 }
 
+/// enable timer interrupt
+pub fn enable_timer_interrupt() {
+    unsafe {
+        sie::set_stimer();
+    }
+}
+
 ///  Process the trap.
 ///  If it is a system call, call the syscall function.
 ///  If it is an exception, print the exception information and then execute the next program.
@@ -30,23 +43,29 @@ pub fn init() {
 /// # Parameter
 /// * 'context' - User stack context
 #[no_mangle]
-pub fn trap_handler(context: &mut TrapContext) -> &mut TrapContext {
+pub fn trap_handler(context: &mut TrapContext) {
     let scause = scause::read();
     let stval = stval::read();
     match scause.cause() {
+        Trap::Interrupt(Interrupt::SupervisorTimer) => {
+            set_next_trigger();
+            suspended_current_and_run_next();
+        }
         Trap::Exception(Exception::UserEnvCall) => {
             context.sepc += 4;
+            // Count the number of system calls
+            called_system_call(context.x[17]);
             context.x[10] =
                 syscall(context.x[17], [context.x[10], context.x[11], context.x[12]]) as usize;
         }
         Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => {
             println!("[kernel] PageFault in application, kernel killed it.");
             // run next app
-            run_next_app();
+            exit_current_and_run_next();
         }
         Trap::Exception(Exception::IllegalInstruction) => {
             println!("[kernel] IllegalInstruction in application, kernel killed it.");
-            run_next_app();
+            exit_current_and_run_next();
         }
         _ => {
             panic!(
@@ -56,5 +75,4 @@ pub fn trap_handler(context: &mut TrapContext) -> &mut TrapContext {
             );
         }
     }
-    context
 }
