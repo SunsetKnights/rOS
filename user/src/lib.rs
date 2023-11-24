@@ -4,8 +4,8 @@
 
 #[macro_use]
 pub mod console;
-mod sys_call;
 mod lang_runtimes;
+mod sys_call;
 
 #[no_mangle]
 // generation symbol use function name, no change
@@ -41,4 +41,11 @@ pub fn write(fd: usize, buffer: &[u8]) -> isize {
 }
 pub fn exit(xstate: i32) -> isize {
     sys_exit(xstate)
+}
+/// yield is the rust key word, so this function named yield_
+pub fn yield_() -> isize {
+    sys_yield()
+}
+pub fn get_time() -> isize {
+    sys_get_time()
 }
