@@ -4,11 +4,14 @@
 #![feature(panic_info_message)]
 #[macro_use]
 mod lang_runtimes; //完成核心（core）库里面的一些功能，例如panic宏
-pub mod batch;
+pub mod config;
 mod console; //提供屏幕打印的功能
+pub mod loader;
 mod sbi_services; //提供调用sbi函数的功能
 pub mod sync;
 pub mod syscall;
+pub mod task;
+pub mod timer;
 pub mod trap;
 
 use core::arch::global_asm;
@@ -33,8 +36,11 @@ pub fn rust_main() -> ! {
     }
     clean_bss();
     trap::init();
-    batch::init();
-    batch::run_next_app();
+    trap::enable_timer_interrupt();
+    loader::load_apps();
+    timer::set_next_trigger();
+    task::run_first_task();
+    panic!("Unreachable in rust_main!");
 }
 
 fn clean_bss() {
