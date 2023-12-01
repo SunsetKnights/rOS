@@ -35,6 +35,8 @@ fn clear_bss() {
     }
 }
 
+use core::borrow::BorrowMut;
+
 use crate::sys_call::*;
 pub fn write(fd: usize, buffer: &[u8]) -> isize {
     sys_write(fd, buffer)
@@ -48,4 +50,14 @@ pub fn yield_() -> isize {
 }
 pub fn get_time() -> isize {
     sys_get_time()
+}
+pub fn get_task_info(id: usize) -> TaskInfo {
+    let mut ret = TaskInfo {
+        id,
+        status: TaskStatus::UnInit,
+        call: [SyscallInfo { id: 0, time: 0 }; SYSCALL_QUANTITY],
+        time: 0,
+    };
+    sys_task_info(id, ret.borrow_mut() as *mut TaskInfo);
+    ret
 }

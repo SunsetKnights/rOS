@@ -2,7 +2,9 @@
 
 use crate::{
     println,
-    task::{exit_current_and_run_next, info::TaskInfo, suspended_current_and_run_next},
+    task::{
+        exit_current_and_run_next, get_task_info, info::TaskInfo, suspended_current_and_run_next,
+    },
     timer::get_time_ms,
 };
 
@@ -23,5 +25,6 @@ pub fn sys_get_time() -> isize {
 }
 
 pub fn sys_task_info(id: usize, ti: *mut TaskInfo) -> isize {
-    1
+    get_task_info(id, ti);
+    0
 }

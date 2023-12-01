@@ -1,13 +1,14 @@
 use self::switch::__switch;
 use self::task::TaskControlBlock;
-use crate::config::SYSCALL_ID;
+use crate::config::{SYSCALL_ID, SYSCALL_QUANTITY};
 use crate::loader::{get_num_app, init_app};
+use crate::println;
 use crate::sbi_services::shutdown;
 use crate::task::context::TaskContext;
 use crate::task::info::TaskInfo;
 use crate::task::task::TaskStatus;
+use crate::timer::get_time;
 use crate::{config::MAX_APP_NUM, sync::UPSafeCell};
-use crate::{println, timer};
 use lazy_static::lazy_static;
 
 pub mod context;
@@ -59,11 +60,30 @@ impl TaskManager {
     fn called_system_call(&self, sys_call_id: usize) {
         let mut inner = self.inner.exclusive_access();
         let task = inner.current_task;
-        let mut call_id_index = 0;
-        while SYSCALL_ID[call_id_index] != sys_call_id {
-            call_id_index += 1;
+        for i in 0..SYSCALL_QUANTITY {
+            if SYSCALL_ID[i] == sys_call_id {
+                inner.tasks[task].task_info.call[i].time += 1;
+                break;
+            }
         }
-        inner.tasks[task].task_info.call[call_id_index].time += 1;
+    }
+
+    fn leave_kernel(&self) {
+        self.inner.exclusive_access().last_trap_time = get_time();
+    }
+
+    fn entry_kernel(&self) {
+        let curr_time = get_time();
+        let mut inner = self.inner.exclusive_access();
+        let curr_task_id = inner.current_task;
+        inner.tasks[curr_task_id].task_info.time += curr_time - inner.last_trap_time;
+    }
+
+    fn get_task_info(&self, id: usize, ti: *mut TaskInfo) {
+        let inner = self.inner.exclusive_access();
+        unsafe {
+            (*ti) = inner.tasks[id].task_info.clone();
+        }
     }
 
     fn find_next_task(&self) -> Option<usize> {
@@ -141,4 +161,18 @@ pub fn suspended_current_and_run_next() {
 
 pub fn called_system_call(system_call_id: usize) {
     TASK_MANAGER.called_system_call(system_call_id);
+}
+
+#[no_mangle]
+pub fn save_leave_kernel_time() {
+    TASK_MANAGER.leave_kernel();
+}
+
+#[no_mangle]
+pub fn update_user_task_run_time() {
+    TASK_MANAGER.entry_kernel();
+}
+
+pub fn get_task_info(id: usize, ti: *mut TaskInfo) {
+    TASK_MANAGER.get_task_info(id, ti);
 }
