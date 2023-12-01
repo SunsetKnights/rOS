@@ -24,6 +24,7 @@ pub struct TaskManager {
 // variable
 pub struct TaskManagerInner {
     tasks: [TaskControlBlock; MAX_APP_NUM],
+    tasks_info: [TaskInfo; MAX_APP_NUM],
     current_task: usize,
     last_trap_time: usize,
 }
@@ -31,11 +32,9 @@ pub struct TaskManagerInner {
 impl TaskManager {
     fn run_first_task(&self) -> ! {
         let mut inner = self.inner.exclusive_access();
+        inner.tasks_info[0].status = TaskStatus::Running;
         let task0 = &mut inner.tasks[0];
         task0.task_status = TaskStatus::Running;
-
-        task0.task_info.status = TaskStatus::Running;
-
         let task0_context_ptr = &task0.task_context as *const TaskContext;
         let mut fake_task_ptr = TaskContext::zero_init();
         drop(inner);
@@ -47,14 +46,14 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let task = inner.current_task;
         inner.tasks[task].task_status = TaskStatus::Ready;
-        inner.tasks[task].task_info.status = TaskStatus::Ready;
+        inner.tasks_info[task].status = TaskStatus::Ready;
     }
 
     fn mark_current_exited(&self) {
         let mut inner = self.inner.exclusive_access();
         let task = inner.current_task;
         inner.tasks[task].task_status = TaskStatus::Exited;
-        inner.tasks[task].task_info.status = TaskStatus::Exited;
+        inner.tasks_info[task].status = TaskStatus::Exited;
     }
 
     fn called_system_call(&self, sys_call_id: usize) {
@@ -62,7 +61,7 @@ impl TaskManager {
         let task = inner.current_task;
         for i in 0..SYSCALL_QUANTITY {
             if SYSCALL_ID[i] == sys_call_id {
-                inner.tasks[task].task_info.call[i].time += 1;
+                inner.tasks_info[task].call[i].time += 1;
                 break;
             }
         }
@@ -76,13 +75,13 @@ impl TaskManager {
         let curr_time = get_time();
         let mut inner = self.inner.exclusive_access();
         let curr_task_id = inner.current_task;
-        inner.tasks[curr_task_id].task_info.time += curr_time - inner.last_trap_time;
+        inner.tasks_info[curr_task_id].time += curr_time - inner.last_trap_time;
     }
 
     fn get_task_info(&self, id: usize, ti: *mut TaskInfo) {
         let inner = self.inner.exclusive_access();
         unsafe {
-            (*ti) = inner.tasks[id].task_info.clone();
+            (*ti) = inner.tasks_info[id].clone();
         }
     }
 
@@ -129,18 +128,19 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {
             task_context: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
-            task_info:TaskInfo::init(),
         }; MAX_APP_NUM];
+        let mut tasks_info = [TaskInfo::init();MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             // set application start address
             // set kernel sp
             // set ra register to __restoretrapreg symbol
             task.task_context = TaskContext::goto_restoretrapreg_init(init_app(i));
             task.task_status = TaskStatus::Ready;
-            task.task_info.id = i;
+            tasks_info[i].id = i;
+            tasks_info[i].status = TaskStatus::Ready;
         }
         TaskManager { num_app, inner:unsafe {
-            UPSafeCell::new(TaskManagerInner { tasks, current_task: 0 ,last_trap_time: 0}
+            UPSafeCell::new(TaskManagerInner { tasks,tasks_info, current_task: 0 ,last_trap_time: 0}
         )}}
     };
 }
