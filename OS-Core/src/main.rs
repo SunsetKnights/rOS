@@ -2,11 +2,16 @@
 #![no_main]
 //表示没有main函数，因为没有std库，所以也不存在main函数之前的初始化过程
 #![feature(panic_info_message)]
+#![feature(alloc_error_handler)]
+
+extern crate alloc;
+
 #[macro_use]
 mod lang_runtimes; //完成核心（core）库里面的一些功能，例如panic宏
 pub mod config;
 mod console; //提供屏幕打印的功能
 pub mod loader;
+pub mod mm;
 mod sbi_services; //提供调用sbi函数的功能
 pub mod sync;
 pub mod syscall;
@@ -35,6 +40,8 @@ pub fn rust_main() -> ! {
         fn boot_stack_top(); // stack top
     }
     clean_bss();
+    mm::heap_allocator::init_heap();
+    mm::heap_allocator::heap_test();
     trap::init();
     trap::enable_timer_interrupt();
     loader::load_apps();
