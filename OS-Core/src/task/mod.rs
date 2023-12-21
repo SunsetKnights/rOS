@@ -1,14 +1,16 @@
 use self::switch::__switch;
 use self::task::TaskControlBlock;
 use crate::config::{SYSCALL_ID, SYSCALL_QUANTITY};
-use crate::loader::{get_num_app, init_app};
+use crate::loader::{get_num_app, load_app};
 use crate::println;
 use crate::sbi_services::shutdown;
 use crate::task::context::TaskContext;
 use crate::task::info::TaskInfo;
 use crate::task::task::TaskStatus;
 use crate::timer::get_time;
-use crate::{config::MAX_APP_NUM, sync::UPSafeCell};
+use crate::trap::TrapContext;
+use crate::sync::UPSafeCell;
+use alloc::vec::Vec;
 use lazy_static::lazy_static;
 
 pub mod context;
@@ -23,8 +25,8 @@ pub struct TaskManager {
 }
 // variable
 pub struct TaskManagerInner {
-    tasks: [TaskControlBlock; MAX_APP_NUM],
-    tasks_info: [TaskInfo; MAX_APP_NUM],
+    tasks: Vec<TaskControlBlock>,
+    tasks_info: Vec<TaskInfo>,
     current_task: usize,
     last_trap_time: usize,
 }
@@ -85,15 +87,24 @@ impl TaskManager {
         }
     }
 
+    fn get_current_token(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        let current_task = inner.current_task;
+        inner.tasks[current_task].get_user_token()
+    }
+
+    fn get_current_trap_context(&self) -> &mut TrapContext {
+        let inner = self.inner.exclusive_access();
+        let current_task = inner.current_task;
+        inner.tasks[current_task].get_trap_context()
+    }
+
     fn find_next_task(&self) -> Option<usize> {
         let inner = self.inner.exclusive_access();
         let current_task = inner.current_task;
-        for i in current_task + 1..current_task + self.num_app + 1 {
-            if inner.tasks[i % self.num_app].task_status == TaskStatus::Ready {
-                return Some(i % self.num_app);
-            }
-        }
-        return None;
+        (current_task + 1..current_task + self.num_app + 1)
+            .map(|id| id % self.num_app)
+            .find(|id| inner.tasks[*id].task_status == TaskStatus::Ready)
     }
 
     /// Switch the next task status to running and switch to the next task.
@@ -125,23 +136,23 @@ impl TaskManager {
 lazy_static! {
     static ref TASK_MANAGER: TaskManager = {
         let num_app = get_num_app();
-        let mut tasks = [TaskControlBlock {
-            task_context: TaskContext::zero_init(),
-            task_status: TaskStatus::UnInit,
-        }; MAX_APP_NUM];
-        let mut tasks_info = [TaskInfo::init();MAX_APP_NUM];
-        for (i, task) in tasks.iter_mut().enumerate() {
-            // set application start address
-            // set kernel sp
-            // set ra register to __restoretrapreg symbol
-            task.task_context = TaskContext::goto_restoretrapreg_init(init_app(i));
-            task.task_status = TaskStatus::Ready;
-            tasks_info[i].id = i;
-            tasks_info[i].status = TaskStatus::Ready;
+        let mut tasks: Vec<TaskControlBlock> = Vec::new();
+        let mut tasks_info: Vec<TaskInfo> = Vec::new();
+        for i in 0..num_app {
+            tasks.push(TaskControlBlock::new(load_app(i), i));
+            tasks_info.push(TaskInfo::init(i));
         }
-        TaskManager { num_app, inner:unsafe {
-            UPSafeCell::new(TaskManagerInner { tasks,tasks_info, current_task: 0 ,last_trap_time: 0}
-        )}}
+        TaskManager {
+            num_app,
+            inner: unsafe {
+                UPSafeCell::new(TaskManagerInner {
+                    tasks,
+                    tasks_info,
+                    current_task: 0,
+                    last_trap_time: 0,
+                })
+            },
+        }
     };
 }
 
@@ -175,4 +186,12 @@ pub fn update_user_task_run_time() {
 
 pub fn get_task_info(id: usize, ti: *mut TaskInfo) {
     TASK_MANAGER.get_task_info(id, ti);
+}
+
+pub fn current_user_token() -> usize {
+    TASK_MANAGER.get_current_token()
+}
+
+pub fn current_user_trap_context() -> &'static mut TrapContext {
+    TASK_MANAGER.get_current_trap_context()
 }
