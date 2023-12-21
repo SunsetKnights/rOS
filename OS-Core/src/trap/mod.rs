@@ -1,13 +1,17 @@
 mod context;
 
 use crate::{
+    config::{TRAMPOLINE, TRAP_CONTEXT},
     println,
     syscall::syscall,
-    task::{called_system_call, exit_current_and_run_next, suspended_current_and_run_next},
+    task::{
+        called_system_call, current_user_token, exit_current_and_run_next,
+        suspended_current_and_run_next,
+    },
     timer::set_next_trigger,
 };
 pub use context::TrapContext;
-use core::arch::global_asm;
+use core::arch::{asm, global_asm};
 use riscv::register::{
     scause::Interrupt,
     scause::{self, Exception, Trap},
@@ -21,12 +25,7 @@ global_asm!(include_str!("trap.S"));
 /// * When an exception occurs, the pc register will be set to the value in the stvec register,
 /// that is, the value of the stvec register is the entry address into S mode.
 pub fn init() {
-    extern "C" {
-        fn __savetrapsreg();
-    }
-    unsafe {
-        stvec::write(__savetrapsreg as usize, TrapMode::Direct);
-    }
+    set_user_trap_entry();
 }
 
 /// enable timer interrupt
@@ -44,6 +43,7 @@ pub fn enable_timer_interrupt() {
 /// * 'context' - User stack context
 #[no_mangle]
 pub fn trap_handler(context: &mut TrapContext) {
+    set_kernel_trap_entry();
     let scause = scause::read();
     let stval = stval::read();
     match scause.cause() {
@@ -74,5 +74,43 @@ pub fn trap_handler(context: &mut TrapContext) {
                 stval
             );
         }
+    }
+    trap_return();
+}
+
+fn set_kernel_trap_entry() {
+    unsafe {
+        stvec::write(trap_from_kernel as usize, TrapMode::Direct);
+    }
+}
+#[no_mangle]
+pub fn trap_from_kernel() {
+    panic!("a trap from kernel!");
+}
+
+fn set_user_trap_entry() {
+    unsafe {
+        stvec::write(TRAMPOLINE, TrapMode::Direct);
+    }
+}
+#[no_mangle]
+pub fn trap_return() -> ! {
+    set_user_trap_entry();
+    let trap_context_ptr = TRAP_CONTEXT;
+    let user_satp = current_user_token();
+    extern "C" {
+        fn __savetrapsreg();
+        fn __restoretrapreg();
+    }
+    let restore_va = __restoretrapreg as usize - __savetrapsreg as usize + TRAMPOLINE;
+    unsafe {
+        asm!(
+            "fence.i",
+            "jr {restore_va}",
+            restore_va = in(reg) restore_va,
+            in("a0") trap_context_ptr,
+            in("a1") user_satp,
+            options(noreturn)
+        );
     }
 }
