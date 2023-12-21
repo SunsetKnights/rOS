@@ -16,9 +16,9 @@ pub struct SyscallInfo {
 }
 
 impl TaskInfo {
-    pub fn init() -> Self {
+    pub fn init(id: usize) -> Self {
         TaskInfo {
-            id: 0,
+            id,
             status: TaskStatus::UnInit,
             call: [
                 SyscallInfo { id: 64, time: 0 },
