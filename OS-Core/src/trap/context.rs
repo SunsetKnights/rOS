@@ -7,8 +7,14 @@ pub struct TrapContext {
     pub x: [usize; 32],
     // sstatus register
     pub sstatus: Sstatus,
-    // sepc register
+    // sepc register, trap return address
     pub sepc: usize,
+    // kernel root ppn
+    pub kernel_satp: usize,
+    // application's kernel stack address
+    pub kernel_sp: usize,
+    // trap handler
+    pub trap_handler: usize,
 }
 
 impl TrapContext {
@@ -18,13 +24,22 @@ impl TrapContext {
     }
 
     /// Init a user app context
-    pub fn init_app_context(entry: usize, sp: usize) -> Self {
+    pub fn init_app_context(
+        entry: usize,
+        sp: usize,
+        kernel_satp: usize,
+        kernel_sp: usize,
+        trap_handler: usize,
+    ) -> Self {
         let mut sstatus = sstatus::read();
         sstatus.set_spp(SPP::User);
         let mut ret = Self {
             x: [0; 32],
             sstatus,
             sepc: entry,
+            kernel_satp,
+            kernel_sp,
+            trap_handler,
         };
         ret.set_sp(sp);
         ret
