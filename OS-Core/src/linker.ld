@@ -15,6 +15,10 @@ SECTIONS
     stext = .;
     .text : {
         *(.text.entry)  /*.text.entry即entry.asm中第一行代码的位置*/
+        . = ALIGN(4K);
+        strampoline = .;
+        *(.text.trampoline);
+        . = ALIGN(4K);
         *(.text .text.*)
     }
     /*ALIGN(4K)表示插入一些填充字节,直到当前位置在4K对齐*/
@@ -37,9 +41,9 @@ SECTIONS
     . = ALIGN(4K);
     edata = .;
 
+    sbss = .;
     .bss : {
         *(.bss.stack)   /*.bss.stack即entry.asm中，第一个栈的位置*/
-        sbss = .;
         *(.bss .bss.*)
         *(.sbss .sbss.*)
     }
