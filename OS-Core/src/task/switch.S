@@ -8,8 +8,10 @@
     .section .text
     .global __switch
 __switch:
-    // ra register save ret address
-    // 
+    # __switch(
+    #     current_task_context_ptr: *mut TaskContext,
+    #     next_task_context_ptr: *const TaskContext,
+    # )
     sd sp, 8(a0)
     sd ra, 0(a0)
     .set n, 0
