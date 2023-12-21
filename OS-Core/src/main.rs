@@ -4,6 +4,8 @@
 #![feature(panic_info_message)]
 #![feature(alloc_error_handler)]
 
+#[macro_use]
+extern crate bitflags;
 extern crate alloc;
 
 #[macro_use]
@@ -27,25 +29,17 @@ global_asm!(include_str!("link_app.S"));
 #[allow(unused)]
 #[no_mangle] //告诉编译器不要乱改名字，不然entry.asm中找不到入口点
 pub fn rust_main() -> ! {
-    extern "C" {
-        fn stext(); // begin addr of text segment
-        fn etext(); // end addr of text segment
-        fn srodata(); // start addr of Read-Only data segment
-        fn erodata(); // end addr of Read-Only data ssegment
-        fn sdata(); // start addr of data segment
-        fn edata(); // end addr of data segment
-        fn sbss(); // start addr of BSS segment
-        fn ebss(); // end addr of BSS segment
-        fn boot_stack_lower_bound(); // stack lower bound
-        fn boot_stack_top(); // stack top
-    }
     clean_bss();
-    mm::heap_allocator::init_heap();
-    mm::heap_allocator::heap_test();
+    info!("init mm module...");
+    mm::init();
+    info!("init trap module...");
     trap::init();
+    info!("enable timer interrupt...");
     trap::enable_timer_interrupt();
-    loader::load_apps();
+    //loader::load_apps();
+    info!("set next timmer interrupt...");
     timer::set_next_trigger();
+    info!("run first task...");
     task::run_first_task();
     panic!("Unreachable in rust_main!");
 }
