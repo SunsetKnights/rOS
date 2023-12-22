@@ -2,6 +2,8 @@ mod context;
 
 use crate::{
     config::{TRAMPOLINE, TRAP_CONTEXT},
+    info,
+    mm::address::{VirtAddr, VirtPageNum},
     println,
     syscall::syscall,
     task::{
@@ -85,6 +87,26 @@ fn set_kernel_trap_entry() {
 }
 #[no_mangle]
 pub fn trap_from_kernel() {
+    let scause = scause::read();
+    let stval = stval::read();
+    match scause.cause() {
+        Trap::Interrupt(Interrupt::SupervisorTimer) => {
+            info!("Timer interrupt from kernel.");
+        }
+        Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => {
+            info!("PageFault in kernel.");
+        }
+        Trap::Exception(Exception::IllegalInstruction) => {
+            info!("IllegalInstruction in kernel.");
+        }
+        _ => {
+            panic!(
+                "Unsupported trap {:?}, stval = {:#x}!",
+                scause.cause(),
+                stval
+            );
+        }
+    }
     panic!("a trap from kernel!");
 }
 
@@ -99,10 +121,11 @@ pub fn trap_return() -> ! {
     let trap_context_ptr = TRAP_CONTEXT;
     let user_satp = current_user_token();
     extern "C" {
-        fn __savetrapsreg();
         fn __restoretrapreg();
     }
-    let restore_va = __restoretrapreg as usize - __savetrapsreg as usize + TRAMPOLINE;
+    let restore_va = VirtPageNum::from(VirtAddr::from(TRAMPOLINE)).0
+        + VirtAddr::from(__restoretrapreg as usize).page_offset();
+    info!("the restore va is: {}.", restore_va);
     unsafe {
         asm!(
             "fence.i",

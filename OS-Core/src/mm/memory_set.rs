@@ -5,7 +5,6 @@ use super::{
 };
 use crate::{
     config::{PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT, USABLE_MEMORY_END, USER_STACK_SIZE},
-    info,
     mm::address::{PhysAddr, StepByOne},
     println,
     sync::UPSafeCell,
@@ -175,7 +174,6 @@ impl MemorySet {
             satp::write(satp);
             // SFENCE.VMA tells CPU to check page tbl updates
             asm!("sfence.vma");
-            info!("already started momery mapping.");
         }
     }
     /// Put a memory area into the current MemorySet.
@@ -338,18 +336,6 @@ impl MemorySet {
             ),
             None,
         );
-
-        let number = 100;
-        let test_ptr = &number as *const i32 as usize;
-        let addr = VirtAddr::from(test_ptr);
-        let offset = addr.page_offset();
-        let vpn = addr.floor();
-        let ppn = kernel_memory_set.page_table.translate(vpn).unwrap().ppn();
-        info!(
-            "pa: {}, va: {}, offset: {}, vpn: {}, ppn: {}",
-            test_ptr, addr.0, offset, vpn.0, ppn.0
-        );
-
         kernel_memory_set
     }
     /// Find a page table entry by virtual page number.

@@ -13,19 +13,19 @@ SECTIONS
         *(.text.entry)  /*.text.entry即entry.asm中第一行代码的位置*/
         *(.text .text.*)
     }
+    . = ALIGN(4K);
     .rodata : {
         *(.rodata .rodata.*)
         *(.srodata .srodata.*)
     }
+    . = ALIGN(4K);
     .data : {
         *(.data .data.*)
         *(.sdata .sdata.*)
     }
     .bss : {
-        u_sbss = .;
         *(.bss .bss.*)
         *(.sbss .sbss.*)
-        u_ebss = .;
     }
     /DISCARD/ : {   /*这些段将不会链接到输出文件*/
         *(.eh_frame)

@@ -2,14 +2,14 @@ use self::switch::__switch;
 use self::task::TaskControlBlock;
 use crate::config::{SYSCALL_ID, SYSCALL_QUANTITY};
 use crate::loader::{get_num_app, load_app};
-use crate::println;
 use crate::sbi_services::shutdown;
+use crate::sync::UPSafeCell;
 use crate::task::context::TaskContext;
 use crate::task::info::TaskInfo;
 use crate::task::task::TaskStatus;
 use crate::timer::get_time;
 use crate::trap::TrapContext;
-use crate::sync::UPSafeCell;
+use crate::{info, println};
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
 
@@ -40,6 +40,7 @@ impl TaskManager {
         let task0_context_ptr = &task0.task_context as *const TaskContext;
         let mut fake_task_ptr = TaskContext::zero_init();
         drop(inner);
+        info!("switching to first task...");
         unsafe { __switch((&mut fake_task_ptr) as *mut TaskContext, task0_context_ptr) };
         panic!("unreachable in run_first_task!");
     }

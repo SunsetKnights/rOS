@@ -12,9 +12,7 @@ mod sys_call;
 // set section name, in linker script, this section is top of all section. also, this symbol(function name) is the entry of program
 #[link_section = ".text.entry"]
 pub extern "C" fn _start() -> ! {
-    clear_bss(); //clear bss section
-    let result = main(); //run user program and get return
-    exit(result); //return exit code to os
+    exit(main()); //return exit code to os
     panic!("unreachable after sys_exit!");
 }
 
@@ -22,17 +20,6 @@ pub extern "C" fn _start() -> ! {
 #[no_mangle]
 fn main() -> i32 {
     panic!("no main find") //if not find main function in user program, use this main function
-}
-
-fn clear_bss() {
-    extern "C" {
-        fn u_sbss();
-        fn u_ebss();
-    }
-    // u_sbss和u_ebss为用户程序bss段开始和结束的位置，按字节为单位清零
-    for c in u_sbss as usize..u_ebss as usize {
-        unsafe { (c as *mut u8).write_volatile(0) }
-    }
 }
 
 use core::borrow::BorrowMut;
