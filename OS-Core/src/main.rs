@@ -30,16 +30,10 @@ global_asm!(include_str!("link_app.S"));
 #[no_mangle] //告诉编译器不要乱改名字，不然entry.asm中找不到入口点
 pub fn rust_main() -> ! {
     clean_bss();
-    info!("init mm module...");
     mm::init();
-    info!("init trap module...");
     trap::init();
-    info!("enable timer interrupt...");
     trap::enable_timer_interrupt();
-    //loader::load_apps();
-    info!("set next timmer interrupt...");
     timer::set_next_trigger();
-    info!("run first task...");
     task::run_first_task();
     panic!("Unreachable in rust_main!");
 }
