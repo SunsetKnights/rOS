@@ -21,7 +21,8 @@ bitflags! {
     }
 }
 
-///Page table entry for directory page
+///Page table entry for directory page.
+/// Bit location like: 53,52,51......3,2,1,0.
 ///# PTE struct:
 ///* [0-7]: V R W X U G A D
 ///* [8-9]: RSW, Ignored by MMU
@@ -82,7 +83,7 @@ impl PageTable {
     /// and then the address is translated through the root page table
     pub fn from_token(token: usize) -> Self {
         Self {
-            root_ppn: PhysPageNum(token & 1 << 44 - 1),
+            root_ppn: PhysPageNum(token & ((1 << 44) - 1)),
             frames: Vec::new(),
         }
     }
