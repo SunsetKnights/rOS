@@ -2,13 +2,12 @@ mod context;
 
 use crate::{
     config::{TRAMPOLINE, TRAP_CONTEXT},
-    info,
-    mm::address::{VirtAddr, VirtPageNum},
+    mm::address::VirtAddr,
     println,
     syscall::syscall,
     task::{
-        called_system_call, current_user_token, exit_current_and_run_next,
-        suspended_current_and_run_next,
+        called_system_call, current_user_token, current_user_trap_context,
+        exit_current_and_run_next, suspended_current_and_run_next,
     },
     timer::set_next_trigger,
 };
@@ -44,8 +43,9 @@ pub fn enable_timer_interrupt() {
 /// # Parameter
 /// * 'context' - User stack context
 #[no_mangle]
-pub fn trap_handler(context: &mut TrapContext) {
+pub fn trap_handler() {
     set_kernel_trap_entry();
+    let context = current_user_trap_context();
     let scause = scause::read();
     let stval = stval::read();
     match scause.cause() {
@@ -87,26 +87,6 @@ fn set_kernel_trap_entry() {
 }
 #[no_mangle]
 pub fn trap_from_kernel() {
-    let scause = scause::read();
-    let stval = stval::read();
-    match scause.cause() {
-        Trap::Interrupt(Interrupt::SupervisorTimer) => {
-            info!("Timer interrupt from kernel.");
-        }
-        Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => {
-            info!("PageFault in kernel.");
-        }
-        Trap::Exception(Exception::IllegalInstruction) => {
-            info!("IllegalInstruction in kernel.");
-        }
-        _ => {
-            panic!(
-                "Unsupported trap {:?}, stval = {:#x}!",
-                scause.cause(),
-                stval
-            );
-        }
-    }
     panic!("a trap from kernel!");
 }
 
@@ -123,9 +103,7 @@ pub fn trap_return() -> ! {
     extern "C" {
         fn __restoretrapreg();
     }
-    let restore_va = VirtPageNum::from(VirtAddr::from(TRAMPOLINE)).0
-        + VirtAddr::from(__restoretrapreg as usize).page_offset();
-    info!("the restore va is: {}.", restore_va);
+    let restore_va = TRAMPOLINE + VirtAddr::from(__restoretrapreg as usize).page_offset();
     unsafe {
         asm!(
             "fence.i",
