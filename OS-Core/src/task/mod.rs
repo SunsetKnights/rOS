@@ -174,12 +174,10 @@ pub fn called_system_call(system_call_id: usize) {
     TASK_MANAGER.called_system_call(system_call_id);
 }
 
-#[no_mangle]
-pub fn save_leave_kernel_time() {
+pub fn record_leave_kernel_time() {
     TASK_MANAGER.leave_kernel();
 }
 
-#[no_mangle]
 pub fn update_user_task_run_time() {
     TASK_MANAGER.entry_kernel();
 }
