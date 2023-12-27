@@ -2,7 +2,7 @@
 OUTPUT_ARCH(riscv)
 /*指定入口点位置*/
 ENTRY(_start)
-BASE_ADDRESS = 0x80400000;
+BASE_ADDRESS = 0x10000;
 SECTIONS
 {
     /* .表示当前位置，即从这里开始往下放置需要被链接的文件的段 */
