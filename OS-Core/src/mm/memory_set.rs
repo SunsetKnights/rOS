@@ -277,12 +277,21 @@ impl MemorySet {
         }
         let mut kernel_memory_set = Self::new();
         kernel_memory_set.map_trampoline();
-        println!(".text [{:#x}, {:#x})", stext as usize, etext as usize);
-        println!(".rodata [{:#x}, {:#x})", srodata as usize, erodata as usize);
-        println!(".data [{:#x}, {:#x})", sdata as usize, edata as usize);
-        println!(".bss [{:#x}, {:#x})", sbss as usize, ebss as usize);
+        println!(
+            "[kernel] .text [{:#x}, {:#x})",
+            stext as usize, etext as usize
+        );
+        println!(
+            "[kernel] .rodata [{:#x}, {:#x})",
+            srodata as usize, erodata as usize
+        );
+        println!(
+            "[kernel] .data [{:#x}, {:#x})",
+            sdata as usize, edata as usize
+        );
+        println!("[kernel] .bss [{:#x}, {:#x})", sbss as usize, ebss as usize);
 
-        println!("mapping .text section");
+        println!("[kernel] mapping .text section");
         kernel_memory_set.push(
             MapArea::new(
                 (stext as usize).into(),
@@ -293,7 +302,7 @@ impl MemorySet {
             None,
         );
 
-        println!("mapping .rodata section");
+        println!("[kernel] mapping .rodata section");
         kernel_memory_set.push(
             MapArea::new(
                 (srodata as usize).into(),
@@ -304,7 +313,7 @@ impl MemorySet {
             None,
         );
 
-        println!("mapping .data section");
+        println!("[kernel] mapping .data section");
         kernel_memory_set.push(
             MapArea::new(
                 (sdata as usize).into(),
@@ -315,7 +324,7 @@ impl MemorySet {
             None,
         );
 
-        println!("mapping .bss section");
+        println!("[kernel] mapping .bss section");
         kernel_memory_set.push(
             MapArea::new(
                 (sbss as usize).into(),
@@ -326,7 +335,7 @@ impl MemorySet {
             None,
         );
 
-        println!("mapping physical memory");
+        println!("[kernel] mapping physical memory");
         kernel_memory_set.push(
             MapArea::new(
                 (ekernel as usize).into(),
