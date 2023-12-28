@@ -351,9 +351,39 @@ impl MemorySet {
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.page_table.translate(vpn)
     }
+    /// Convert the virtual address of the current memory space
+    /// into a virtual address that the kernel can access (that is, a physical address)
+    pub fn translate_va(&self, va: VirtAddr) -> PhysAddr {
+        let offset = va.page_offset();
+        let ppn = self.translate(va.into()).unwrap().ppn();
+        (PhysAddr::from(ppn).0 + offset).into()
+    }
     /// get token (satp reg) of memory set
     pub fn token(&self) -> usize {
         self.page_table.token()
+    }
+    /// Copy the data in the kernel with kernel_va as the starting address
+    /// and length len bytes to the memory in the current user address space
+    /// with user_va as the starting address.
+    pub fn copy_data(&self, kernel_va: VirtAddr, user_va: VirtAddr, len: usize) {
+        let end_user_va = user_va.0 + len;
+        let mut user_va_start = user_va;
+        let mut kernek_va_start = kernel_va.0;
+        while user_va_start.0 < end_user_va {
+            let curr_user_end = VirtAddr::from(user_va.ceil()).0.min(end_user_va);
+            let curr_len = curr_user_end - user_va_start.0;
+            let src =
+                unsafe { core::slice::from_raw_parts(kernek_va_start as *const u8, curr_len) };
+            let dst = unsafe {
+                core::slice::from_raw_parts_mut(
+                    self.translate_va(user_va_start).0 as *mut u8,
+                    curr_len,
+                )
+            };
+            dst.copy_from_slice(src);
+            kernek_va_start += curr_len;
+            user_va_start = (user_va_start.0 + curr_len).into();
+        }
     }
 }
 
