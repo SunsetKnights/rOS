@@ -1,3 +1,6 @@
+use core::borrow::Borrow;
+use core::mem::size_of;
+
 use self::switch::__switch;
 use self::task::TaskControlBlock;
 use crate::config::{SYSCALL_ID, SYSCALL_QUANTITY};
@@ -82,9 +85,14 @@ impl TaskManager {
 
     fn get_task_info(&self, id: usize, ti: *mut TaskInfo) {
         let inner = self.inner.exclusive_access();
-        unsafe {
-            (*ti) = inner.tasks_info[id].clone();
-        }
+        let task_control_block = inner.tasks[id].borrow();
+        let task_info = inner.tasks_info[id].borrow();
+        let memset = task_control_block.memory_set.borrow();
+        memset.copy_data(
+            (task_info as *const TaskInfo as usize).into(),
+            (ti as usize).into(),
+            size_of::<TaskInfo>(),
+        );
     }
 
     fn get_current_token(&self) -> usize {
