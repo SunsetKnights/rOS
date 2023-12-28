@@ -1,5 +1,4 @@
 mod context;
-
 use crate::{
     config::{TRAMPOLINE, TRAP_CONTEXT},
     mm::address::VirtAddr,
@@ -7,7 +6,8 @@ use crate::{
     syscall::syscall,
     task::{
         called_system_call, current_user_token, current_user_trap_context,
-        exit_current_and_run_next, suspended_current_and_run_next,
+        exit_current_and_run_next, record_leave_kernel_time, suspended_current_and_run_next,
+        update_user_task_run_time,
     },
     timer::set_next_trigger,
 };
@@ -44,6 +44,8 @@ pub fn enable_timer_interrupt() {
 /// * 'context' - User stack context
 #[no_mangle]
 pub fn trap_handler() {
+    // When entering the kernel, update the execution time of the user application
+    update_user_task_run_time();
     set_kernel_trap_entry();
     let context = current_user_trap_context();
     let scause = scause::read();
@@ -60,13 +62,19 @@ pub fn trap_handler() {
             context.x[10] =
                 syscall(context.x[17], [context.x[10], context.x[11], context.x[12]]) as usize;
         }
-        Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => {
+        Trap::Exception(Exception::StoreFault)
+        | Trap::Exception(Exception::StorePageFault)
+        | Trap::Exception(Exception::LoadFault)
+        | Trap::Exception(Exception::LoadPageFault) => {
             println!("[kernel] PageFault in application, kernel killed it.");
             // run next app
             exit_current_and_run_next();
         }
         Trap::Exception(Exception::IllegalInstruction) => {
-            println!("[kernel] IllegalInstruction in application, kernel killed it.");
+            println!(
+                "[kernel] IllegalInstruction in application, stval is {:#x}, kernel killed it.",
+                stval
+            );
             exit_current_and_run_next();
         }
         _ => {
@@ -104,6 +112,8 @@ pub fn trap_return() -> ! {
         fn __restoretrapreg();
     }
     let restore_va = TRAMPOLINE + VirtAddr::from(__restoretrapreg as usize).page_offset();
+    // Record the time when leaving the kernel
+    record_leave_kernel_time();
     unsafe {
         asm!(
             "fence.i",
