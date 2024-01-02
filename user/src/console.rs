@@ -1,19 +1,26 @@
-use crate::sys_call::sys_write;
+use crate::{read, sys_call::sys_write};
 use core::fmt::{self, Write};
 
-const STDOUT:usize = 1;
+const STDIN: usize = 0;
+const STDOUT: usize = 1;
 
 struct Stdout;
 
 impl Write for Stdout {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        sys_write(STDOUT,s.as_bytes());
+        sys_write(STDOUT, s.as_bytes());
         Ok(())
     }
 }
 
 pub fn print(args: fmt::Arguments) {
     Stdout.write_fmt(args).unwrap();
+}
+
+pub fn get_char() -> u8 {
+    let mut c = [0u8; 1];
+    read(STDIN, &mut c);
+    c[0]
 }
 
 #[macro_export]
