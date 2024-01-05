@@ -1,5 +1,6 @@
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
+use crate::println;
 
 pub fn get_num_app() -> usize {
     extern "C" {
@@ -55,4 +56,18 @@ lazy_static! {
         }
         result
     };
+}
+
+pub fn load_app_from_name(app_name: &str) -> Option<&'static [u8]> {
+    (0..get_num_app())
+        .find(|&id| APP_NAMES[id] == app_name)
+        .map(|id| load_app(id))
+}
+
+pub fn list_app() {
+    println!("************ APPS ************");
+    for name in APP_NAMES.iter() {
+        println!("{}", name);
+    }
+    println!("******************************");
 }
