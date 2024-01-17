@@ -5,9 +5,9 @@ use crate::{
     println,
     syscall::syscall,
     task::{
-        called_system_call, current_user_token, current_user_trap_context,
-        exit_current_and_run_next, record_leave_kernel_time, suspended_current_and_run_next,
-        update_user_task_run_time,
+        exit_current_and_run_next,
+        processor::{current_trap_context, current_user_token},
+        suspended_current_and_run_next,
     },
     timer::set_next_trigger,
 };
@@ -44,10 +44,7 @@ pub fn enable_timer_interrupt() {
 /// * 'context' - User stack context
 #[no_mangle]
 pub fn trap_handler() {
-    // When entering the kernel, update the execution time of the user application
-    update_user_task_run_time();
     set_kernel_trap_entry();
-    let context = current_user_trap_context();
     let scause = scause::read();
     let stval = stval::read();
     match scause.cause() {
@@ -56,11 +53,12 @@ pub fn trap_handler() {
             suspended_current_and_run_next();
         }
         Trap::Exception(Exception::UserEnvCall) => {
+            let mut context = current_trap_context();
             context.sepc += 4;
-            // Count the number of system calls
-            called_system_call(context.x[17]);
-            context.x[10] =
+            let ret =
                 syscall(context.x[17], [context.x[10], context.x[11], context.x[12]]) as usize;
+            context = current_trap_context();
+            context.x[10] = ret;
         }
         Trap::Exception(Exception::StoreFault)
         | Trap::Exception(Exception::StorePageFault)
@@ -68,14 +66,14 @@ pub fn trap_handler() {
         | Trap::Exception(Exception::LoadPageFault) => {
             println!("[kernel] PageFault in application, kernel killed it.");
             // run next app
-            exit_current_and_run_next();
+            exit_current_and_run_next(-2);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
             println!(
                 "[kernel] IllegalInstruction in application, stval is {:#x}, kernel killed it.",
                 stval
             );
-            exit_current_and_run_next();
+            exit_current_and_run_next(-3);
         }
         _ => {
             panic!(
@@ -112,8 +110,6 @@ pub fn trap_return() -> ! {
         fn __restoretrapreg();
     }
     let restore_va = TRAMPOLINE + VirtAddr::from(__restoretrapreg as usize).page_offset();
-    // Record the time when leaving the kernel
-    record_leave_kernel_time();
     unsafe {
         asm!(
             "fence.i",
