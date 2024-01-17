@@ -15,6 +15,7 @@ use lazy_static::lazy_static;
 use riscv::register::satp;
 
 bitflags! {
+    #[derive(Clone, Copy)]
     pub struct MapPermission:u8{
         const R = 1 << 1;
         const W = 1 << 2;
@@ -26,7 +27,7 @@ bitflags! {
 /// How physical pages and virtual pages are mapped
 /// * 'Identical' - Identity mapping, ppn==vpn, use for kernel
 /// * 'Framed' - Randomly assign physical page frames
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum MapType {
     Identical,
     Framed,
@@ -121,7 +122,7 @@ impl MapArea {
         let mut src_start = 0usize;
         let mut dst_start = self.vpn_range.get_start();
         loop {
-            let src = &data[src_start..len.min(PAGE_SIZE)];
+            let src = &data[src_start..len.min(src_start + PAGE_SIZE)];
             let dst = &mut page_table
                 .translate(dst_start)
                 .unwrap()
@@ -133,6 +134,17 @@ impl MapArea {
                 break;
             }
             dst_start.next();
+        }
+    }
+}
+impl Clone for MapArea {
+    /// When forking a new process, copy the MapArea.
+    fn clone(&self) -> Self {
+        Self {
+            vpn_range: VPNRange::new(self.vpn_range.get_start(), self.vpn_range.get_end()),
+            data_frames: BTreeMap::new(),
+            map_type: self.map_type,
+            map_permission: self.map_permission,
         }
     }
 }
@@ -354,9 +366,7 @@ impl MemorySet {
     /// Convert the virtual address of the current memory space
     /// into a virtual address that the kernel can access (that is, a physical address)
     pub fn translate_va(&self, va: VirtAddr) -> PhysAddr {
-        let offset = va.page_offset();
-        let ppn = self.translate(va.into()).unwrap().ppn();
-        (PhysAddr::from(ppn).0 + offset).into()
+        self.page_table.translate_va(va)
     }
     /// get token (satp reg) of memory set
     pub fn token(&self) -> usize {
@@ -384,6 +394,49 @@ impl MemorySet {
             kernek_va_start += curr_len;
             user_va_start = (user_va_start.0 + curr_len).into();
         }
+    }
+    /// Remove the map_area starting from a specific virtual page from memory_set.
+    /// # Parameter
+    /// * 'start_vpn' - start vitrual page number
+    pub fn remove_area_whith_start_vpn(&mut self, start_vpn: VirtPageNum) {
+        for (i, area) in self.areas.iter_mut().enumerate() {
+            if area.vpn_range.get_start() == start_vpn {
+                area.unmap(&mut self.page_table);
+                self.areas.remove(i);
+                break;
+            }
+        }
+    }
+    /// When a process becomes a zombie process,
+    /// all memory areas (excluding directory pages) are reclaimed.
+    pub fn recycle_data_pages(&mut self) {
+        self.areas.clear();
+    }
+}
+impl Clone for MemorySet {
+    /// When forking a new process,
+    /// create a new MemorySet and copy all contents to the new MemorySet.
+    fn clone(&self) -> Self {
+        let mut new_memory_set = Self::new();
+        new_memory_set.map_trampoline();
+        for area in self.areas.iter() {
+            let new_area = area.clone();
+            new_memory_set.push(new_area, None);
+            for vpn in area.vpn_range {
+                let src = self
+                    .translate(vpn)
+                    .unwrap()
+                    .ppn()
+                    .get_physical_page_bytes_array();
+                let dst = new_memory_set
+                    .translate(vpn)
+                    .unwrap()
+                    .ppn()
+                    .get_physical_page_bytes_array();
+                dst.copy_from_slice(src);
+            }
+        }
+        new_memory_set
     }
 }
 

@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
 
-use crate::{config::USABLE_MEMORY_END, mm::address::PhysAddr, sync::UPSafeCell};
+use crate::{config::USABLE_MEMORY_END, info, mm::address::PhysAddr, sync::UPSafeCell};
 
 use super::address::PhysPageNum;
 
@@ -21,6 +21,12 @@ impl StackFrameAllocator {
     pub fn init(&mut self, s: PhysPageNum, e: PhysPageNum) {
         self.current = s.0;
         self.end = e.0;
+        info!(
+            "Usable page number start = {}, end = {}, total {} pages.",
+            s.0,
+            e.0,
+            e.0 - s.0
+        );
     }
 }
 
@@ -50,7 +56,7 @@ impl FrameAllocator for StackFrameAllocator {
 
     /// Deallocate a physical page, if the page has never been assigned or has been recycled, panic
     fn dealloc(&mut self, ppn: PhysPageNum) {
-        if ppn.0 < self.current {
+        if ppn.0 > self.current {
             panic!("This page({}) has never been assigned.", ppn.0);
         }
         if self.recycled.iter().find(|p| p.0 == ppn.0).is_some() {

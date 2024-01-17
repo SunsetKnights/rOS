@@ -1,10 +1,10 @@
 use super::{
-    address::{PhysPageNum, StepByOne, VirtAddr, VirtPageNum},
+    address::{PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum},
     frame_allocator::{frame_alloc, FrameTracker},
 };
 use crate::config::SV39_PPN_WIDTH;
-use alloc::vec;
 use alloc::vec::Vec;
+use alloc::{string::String, vec};
 use bitflags::*;
 
 bitflags! {
@@ -64,9 +64,9 @@ impl PageTableEntry {
 }
 
 pub struct PageTable {
-    // Root physical page for application program
+    // Root physical page for a memory_set
     root_ppn: PhysPageNum,
-    // All physical page frame for application program
+    // All physical table page frame for memory_set
     frames: Vec<FrameTracker>,
 }
 
@@ -169,6 +169,31 @@ impl PageTable {
     pub fn token(&self) -> usize {
         8usize << 60 | self.root_ppn.0
     }
+
+    pub fn translate_va(&self, va: VirtAddr) -> PhysAddr {
+        let offset = va.page_offset();
+        let ppn = self.translate(va.floor()).unwrap().ppn();
+        (PhysAddr::from(ppn).0 + offset).into()
+    }
+
+    pub fn translated_str(&self, str_ptr: *const u8) -> String {
+        let mut ret = String::new();
+        let mut va = str_ptr as usize;
+        loop {
+            let c: u8 = *(self.translate_va(va.into()).get_mut());
+            if c == b'\0' {
+                break;
+            }
+            ret.push(c as char);
+            va += 1;
+        }
+        ret
+    }
+
+    pub fn translated_refmut<T>(&self, va_ptr: *mut T) -> &'static mut T {
+        let va_ptr = va_ptr as usize;
+        self.translate_va(VirtAddr::from(va_ptr)).get_mut()
+    }
 }
 
 /// Read data from user memory set.
@@ -179,11 +204,11 @@ impl PageTable {
 /// * 'len' - data length
 /// # Return
 /// * Data slicing of user memory space data in kernel address space
-pub fn translate_byte_buffer(token: usize, user_va: *const u8, len: usize) -> Vec<&'static [u8]> {
+pub fn translate_byte_buffer(token: usize, user_va: *const u8, len: usize) -> Vec<&'static mut [u8]> {
     let user_page_table = PageTable::from_token(token);
     let mut start = user_va as usize;
     let end = start + len;
-    let mut ret: Vec<&[u8]> = Vec::new();
+    let mut ret: Vec<&mut [u8]> = Vec::new();
     while start < end {
         let start_va = VirtAddr::from(start);
         let mut vpn = start_va.floor();
@@ -194,10 +219,10 @@ pub fn translate_byte_buffer(token: usize, user_va: *const u8, len: usize) -> Ve
         end_va = end_va.min(VirtAddr::from(end));
 
         if end_va.page_offset() == 0 {
-            ret.push(&ppn.get_physical_page_bytes_array()[start_va.page_offset()..]);
+            ret.push(&mut ppn.get_physical_page_bytes_array()[start_va.page_offset()..]);
         } else {
             ret.push(
-                &ppn.get_physical_page_bytes_array()[start_va.page_offset()..end_va.page_offset()],
+                &mut ppn.get_physical_page_bytes_array()[start_va.page_offset()..end_va.page_offset()],
             );
         }
         start = end_va.into();
