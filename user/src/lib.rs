@@ -10,7 +10,6 @@ mod sys_call;
 
 use crate::sys_call::*;
 use buddy_system_allocator::LockedHeap;
-use core::borrow::BorrowMut;
 
 const USER_HEAP_SIZE: usize = 0x4000;
 
@@ -67,6 +66,9 @@ pub fn yield_() -> isize {
 pub fn get_time() -> isize {
     sys_get_time()
 }
+pub fn get_pid() -> isize {
+    sys_get_pid()
+}
 /// The current process creates a child process.
 /// # Return
 /// * For the parent process: return the pid of the child process.
@@ -117,13 +119,19 @@ pub fn wait_pid(pid: usize, exit_code: &mut i32) -> isize {
         }
     }
 }
-pub fn get_task_info(id: usize) -> TaskInfo {
-    let mut ret = TaskInfo {
-        id,
-        status: TaskStatus::UnInit,
-        call: [SyscallInfo { id: 0, time: 0 }; SYSCALL_QUANTITY],
-        time: 0,
-    };
-    sys_task_info(id, ret.borrow_mut() as *mut TaskInfo);
-    ret
+/// Create a child process and run the specified program.
+/// # Parameter
+/// * 'path' - Path to executable file.
+/// # Return
+/// * -1 - If error
+/// * pid - If success
+pub fn spawn(path: &str) -> isize {
+    sys_spawn(path)
+}
+
+pub fn sleep(time_ms: usize) {
+    let start = sys_get_time();
+    while sys_get_time() < start + time_ms as isize {
+        sys_yield();
+    }
 }
