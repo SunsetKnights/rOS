@@ -1,4 +1,4 @@
-use crate::sbi_services::console_putchar;
+use crate::sbi_services::{console_getchar, console_putchar};
 use core::fmt::{self, Write};
 
 struct Stdout;
@@ -14,6 +14,11 @@ impl Write for Stdout {
 
 pub fn print(args: fmt::Arguments) {
     Stdout.write_fmt(args).unwrap();
+}
+
+/// Get a char from console.
+pub fn get_char() -> u8 {
+    console_getchar()
 }
 
 #[macro_export]
@@ -64,4 +69,3 @@ macro_rules! trace {
         $crate::console::print(format_args!(concat!("\x1b[90m[TRACE] ",$fmt,"\x1b[0m\n") $(,$($arg)+)?));
     };
 }
-
