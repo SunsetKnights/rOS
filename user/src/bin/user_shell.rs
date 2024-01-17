@@ -42,6 +42,8 @@ fn main() -> i32 {
                 let exit_pid = wait_pid(pid as usize, &mut exit_code);
                 assert_eq!(pid, exit_pid);
                 println!("Shell: Process {} exit with code {}.", pid, exit_code);
+                print!(">> ");
+                line.clear();
             }
             BS | DL => {
                 print!("{}", BS as char);
@@ -49,9 +51,12 @@ fn main() -> i32 {
                 print!("{}", BS as char);
                 line.pop();
             }
-            _ => {
+            32..=126 => {
                 print!("{}", c as char);
                 line.push(c as char);
+            }
+            _ => {
+                print!("{}", c as char);
             }
         }
     }
