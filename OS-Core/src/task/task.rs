@@ -31,6 +31,11 @@ pub struct ProcessControlBlock {
 }
 
 impl ProcessControlBlock {
+    /// Create a new process and run the elf program
+    /// # Parameter
+    /// * 'elf_data' - Elf program data.
+    /// # Return
+    /// * A new process control block
     pub fn new(elf_data: &[u8]) -> Self {
         let (memory_set, user_sp, entry_point) = MemorySet::new_app_from_elf(elf_data);
         let trap_context_ppn = memory_set
@@ -67,9 +72,11 @@ impl ProcessControlBlock {
         );
         pcb
     }
+    /// Get pid of current process control block.
     pub fn get_pid(&self) -> usize {
         self.pid.0
     }
+    /// Gets a variable borrow for a variable section in a process control block
     pub fn inner_exclusive_access(&self) -> RefMut<'_, ProcessControlBlockInner> {
         self.inner.exclusive_access()
     }
@@ -123,45 +130,14 @@ impl ProcessControlBlock {
         parent_inner.children.push(child.clone());
         child
     }
-
+    /// Create a child process and run the elf program
     pub fn spawn(self: &Arc<ProcessControlBlock>, elf_data: &[u8]) -> usize {
-        let (memory_set, user_sp, entry_point) = MemorySet::new_app_from_elf(elf_data);
-        let trap_context_ppn = memory_set
-            .translate(VirtAddr::from(TRAP_CONTEXT).into())
-            .unwrap()
-            .ppn();
-        let task_status = TaskStatus::Ready;
-        let pid = pid_alloc();
-        let ret = pid.0;
-        let kernel_stack = KernelStack::new(&pid);
-        let kernel_stack_bottom = kernel_stack.get_bottom();
-        let child = Arc::new(Self {
-            pid,
-            kernel_stack,
-            inner: unsafe {
-                UPSafeCell::new(ProcessControlBlockInner {
-                    trap_context_ppn,
-                    base_size: user_sp,
-                    task_context: TaskContext::goto_trap_return(kernel_stack_bottom),
-                    memory_set,
-                    task_status,
-                    parent: Some(Arc::downgrade(self)),
-                    children: Vec::new(),
-                    exit_code: 0,
-                })
-            },
-        });
-        let trap_context = child.inner_exclusive_access().get_trap_context();
-        *trap_context = TrapContext::init_app_context(
-            entry_point,
-            user_sp,
-            KERNEL_SPACE.exclusive_access().token(),
-            kernel_stack_bottom,
-            trap_handler as usize,
-        );
+        let child = Arc::new(Self::new(elf_data));
+        let pid = child.get_pid();
+        child.inner_exclusive_access().parent = Some(Arc::downgrade(self));
         self.inner_exclusive_access().children.push(child.clone());
         add_task(child);
-        ret
+        pid
     }
 }
 
