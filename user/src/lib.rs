@@ -9,6 +9,7 @@ mod lang_runtimes;
 mod sys_call;
 
 use crate::sys_call::*;
+use bitflags::bitflags;
 use buddy_system_allocator::LockedHeap;
 
 const USER_HEAP_SIZE: usize = 0x4000;
@@ -40,7 +41,25 @@ pub extern "C" fn _start() -> ! {
 #[linkage = "weak"]
 #[no_mangle]
 fn main() -> i32 {
-    panic!("no main find") //if not find main function in user program, use this main function
+    panic!("no main find.") //if not find main function in user program, use this main function
+}
+
+bitflags! {
+    pub struct OpenFlags:u32{
+        const READ_ONLY = 0;
+        const WRITE_ONLY = 1 << 0;
+        const READ_WRITE = 1 << 1;
+        const CREATE = 1 << 9;
+        const TRUNC = 1 << 10;
+    }
+}
+
+pub fn open(path: &str, flags: OpenFlags) -> isize {
+    sys_open(path, flags.bits())
+}
+
+pub fn close(fd: usize) -> isize {
+    sys_close(fd)
 }
 
 /// Read a piece of content from the file into the buffer.

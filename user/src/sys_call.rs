@@ -1,6 +1,8 @@
 use core::arch::asm;
 
 // system call numbers
+const SYS_OPEN: usize = 56;
+const SYS_CLOSE: usize = 57;
 const SYS_READ: usize = 63;
 const SYS_WRITE: usize = 64;
 const SYS_EXIT: usize = 93;
@@ -27,6 +29,12 @@ fn sys_call(call_id: usize, args: [usize; 3]) -> isize {
 }
 
 // system calls
+pub fn sys_open(path: &str, flags: u32) -> isize {
+    sys_call(SYS_OPEN, [path.as_ptr() as usize, flags as usize, 0])
+}
+pub fn sys_close(fd: usize) -> isize {
+    sys_call(SYS_CLOSE, [fd, 0, 0])
+}
 pub fn sys_read(fd: usize, buffer: &mut [u8]) -> isize {
     sys_call(SYS_READ, [fd, buffer.as_mut_ptr() as usize, 1])
 }
