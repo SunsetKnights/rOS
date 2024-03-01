@@ -406,6 +406,7 @@ pub struct DirEntry {
 }
 
 impl DirEntry {
+    /// Create a empty directory entry.
     pub fn empty() -> Self {
         Self {
             name: [0; NAME_LENGTH_LIMIT + 1],
@@ -413,6 +414,13 @@ impl DirEntry {
         }
     }
 
+    /// Create a new directory entry from file name or directory name
+    /// and inode number.
+    /// # Parameter
+    /// * 'name' - File or directory name, max length is NAME_LENGTH_LIMIT+1, end with '\0'
+    /// * 'inode_number' - File or directory inode number.
+    /// # Return
+    /// * A directory entry.
     pub fn new(name: &str, inode_number: u32) -> Self {
         assert!(
             name.len() < NAME_LENGTH_LIMIT + 1,
@@ -426,18 +434,21 @@ impl DirEntry {
         }
     }
 
+    /// Convert a directory entry to u8 slice.
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
             core::slice::from_raw_parts(self as *const _ as usize as *const u8, DIRENTRY_SIZE)
         }
     }
 
+    /// Convert a directory entry to mutable u8 slice.
     pub fn as_bytes_mut(&mut self) -> &mut [u8] {
         unsafe {
             core::slice::from_raw_parts_mut(self as *mut _ as usize as *mut u8, DIRENTRY_SIZE)
         }
     }
 
+    /// Get file or directory name, not include '\0'.
     pub fn get_name(&self) -> &str {
         let len = (0..NAME_LENGTH_LIMIT + 1)
             .find(|i| self.name[*i] == 0)
@@ -445,6 +456,7 @@ impl DirEntry {
         core::str::from_utf8(&self.name[..len]).unwrap()
     }
 
+    /// Get inode number.
     pub fn get_inode_number(&self) -> u32 {
         self.inode_number
     }

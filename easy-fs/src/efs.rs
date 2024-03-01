@@ -6,6 +6,7 @@ use crate::{
     block_cache::get_block_cache,
     block_dev::BlockDevice,
     layout::{DiskInode, DiskInodeType, SuperBlock},
+    vfs::Inode,
     BLOCK_SIZE,
 };
 
@@ -79,7 +80,7 @@ impl EasyFileSystem {
         );
         // create root directory
         assert_eq!(efs.alloc_inode(), 0);
-        let (root_inode_block_id, root_inode_block_offset) = efs.get_inode_position(0);
+        let (root_inode_block_id, root_inode_block_offset) = efs.inode_position(0);
         get_block_cache(root_inode_block_id as usize, Arc::clone(&block_device))
             .lock()
             .modify(root_inode_block_offset, |inode: &mut DiskInode| {
@@ -147,15 +148,22 @@ impl EasyFileSystem {
     /// * 'inode_id' - Inode id.
     /// # Return
     /// * (block id, offset)
-    pub fn get_inode_position(&self, inode_id: u32) -> (u32, usize) {
+    pub fn inode_position(&self, inode_id: u32) -> (u32, usize) {
         let inode_size = core::mem::size_of::<DiskInode>();
         let block_id = inode_id / (BLOCK_SIZE / inode_size) as u32 + self.inode_block_start;
         let offset = (inode_id as usize % (BLOCK_SIZE / inode_size)) * inode_size;
         (block_id, offset)
     }
 
-    /// Get disk block id from data block id
-    pub fn get_data_block_id(&self, data_block_id: u32) -> u32 {
+    /// Get disk block id from data block id.
+    pub fn data_block_id(&self, data_block_id: u32) -> u32 {
         self.data_block_start + data_block_id
+    }
+
+    /// Get root inode.
+    pub fn root_inode(efs: &Arc<Mutex<Self>>) -> Inode {
+        let block_device = Arc::clone(&efs.lock().block_device);
+        let (block_id, offset) = efs.lock().inode_position(0);
+        Inode::new(block_id, offset, Arc::clone(efs), block_device)
     }
 }
