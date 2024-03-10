@@ -311,7 +311,7 @@ impl DiskInode {
         // Start offset in file
         let mut start = offest;
         // End offset in file
-        let end = (self.size as usize - start).min(start + buffer.len());
+        let end = (self.size as usize).min(start + buffer.len());
         if end <= start {
             return 0;
         }

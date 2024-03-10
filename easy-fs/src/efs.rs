@@ -99,16 +99,15 @@ impl EasyFileSystem {
                     block_device: Arc::clone(&block_device),
                     inode_bitmap: Bitmap::new(1, super_block.inode_bitmap_blocks as usize),
                     data_bitmap: Bitmap::new(
-                        1 + super_block.inode_bitmap_blocks as usize,
+                        1 + super_block.inode_bitmap_blocks as usize
+                            + super_block.inode_area_blocks as usize,
                         super_block.data_bitmap_blocks as usize,
                     ),
-                    inode_block_start: 1
-                        + super_block.inode_bitmap_blocks
-                        + super_block.data_bitmap_blocks,
+                    inode_block_start: 1 + super_block.inode_bitmap_blocks,
                     data_block_start: 1
                         + super_block.inode_bitmap_blocks
-                        + super_block.data_bitmap_blocks
-                        + super_block.inode_area_blocks,
+                        + super_block.inode_area_blocks
+                        + super_block.data_bitmap_blocks,
                 };
                 Arc::new(Mutex::new(efs))
             })
