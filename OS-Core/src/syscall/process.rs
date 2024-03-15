@@ -1,6 +1,6 @@
 // process manage mod
 use crate::{
-    loader::load_app_from_name,
+    fs::inode::{open_file, OpenFlags},
     mm::page_table::PageTable,
     task::{
         exit_current_and_run_next, get_pid,
@@ -38,9 +38,10 @@ pub fn sys_fork() -> isize {
 pub fn sys_exec(path: *const u8) -> isize {
     let user_token = current_user_token();
     let path = PageTable::from_token(user_token).translated_str(path);
-    if let Some(app_data) = load_app_from_name(path.as_str()) {
+    if let Some(inode) = open_file(&path, OpenFlags::READ_ONLY) {
+        let app_data = inode.read_all();
         let pcb = current_task().unwrap();
-        pcb.exec(app_data);
+        pcb.exec(app_data.as_slice());
         0
     } else {
         -1
@@ -83,9 +84,10 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 pub fn sys_spawn(path: *const u8) -> isize {
     let user_token = current_user_token();
     let path = PageTable::from_token(user_token).translated_str(path);
-    if let Some(app_data) = load_app_from_name(path.as_str()) {
+    if let Some(inode) = open_file(&path, OpenFlags::READ_ONLY) {
+        let app_data = inode.read_all();
         let pcb = current_task().unwrap();
-        pcb.spawn(app_data) as isize
+        pcb.spawn(app_data.as_slice()) as isize
     } else {
         -1
     }
