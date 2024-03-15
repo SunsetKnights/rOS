@@ -1,4 +1,5 @@
-use crate::config::{CLOCK_FREQ, TICKS_PER_SEC};
+use crate::config::TICKS_PER_SEC;
+use crate::platfrom::CLOCK_FREQ;
 use crate::sbi_services::set_timer;
 use riscv::register::time;
 
