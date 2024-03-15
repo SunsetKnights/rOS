@@ -7,11 +7,15 @@
 extern crate bitflags;
 extern crate alloc;
 
+#[path = "platfrom/qemu.rs"]
+mod platfrom;
+
 #[macro_use]
 mod lang_runtimes;
 pub mod config;
 mod console;
-pub mod loader;
+mod drivers;
+pub mod fs;
 pub mod mm;
 mod sbi_services;
 pub mod sync;
@@ -22,8 +26,9 @@ pub mod trap;
 
 use core::arch::global_asm;
 
+use crate::fs::inode::list_app;
+
 global_asm!(include_str!("entry.asm"));
-global_asm!(include_str!("link_app.S"));
 
 #[allow(unused)]
 #[no_mangle]
@@ -34,7 +39,7 @@ pub fn rust_main() -> ! {
     trap::enable_timer_interrupt();
     timer::set_next_trigger();
     task::add_initproc();
-    loader::list_app();
+    list_app();
     task::processor::run_tasks();
     panic!("Unreachable in rust_main!");
 }
