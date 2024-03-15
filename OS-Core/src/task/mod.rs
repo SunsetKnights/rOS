@@ -1,7 +1,7 @@
 use alloc::sync::Arc;
 use lazy_static::lazy_static;
 
-use crate::loader::load_app_from_name;
+use crate::fs::inode::{open_file, OpenFlags};
 
 use self::{
     manager::add_task,
@@ -18,7 +18,10 @@ pub mod task;
 
 lazy_static! {
     pub static ref INITPROC: Arc<ProcessControlBlock> = Arc::new(ProcessControlBlock::new(
-        load_app_from_name("initproc").unwrap()
+        open_file("initproc", OpenFlags::READ_ONLY)
+            .unwrap()
+            .read_all()
+            .as_slice()
     ));
 }
 

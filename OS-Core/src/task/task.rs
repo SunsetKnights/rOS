@@ -5,6 +5,7 @@ use super::{
 };
 use crate::{
     config::TRAP_CONTEXT,
+    fs::{File, Stdin, Stdout},
     mm::{
         address::{PhysPageNum, VirtAddr},
         memory_set::{MemorySet, KERNEL_SPACE},
@@ -12,7 +13,11 @@ use crate::{
     sync::UPSafeCell,
     trap::{trap_handler, TrapContext},
 };
-use alloc::{sync::Arc, sync::Weak, vec::Vec};
+use alloc::{
+    sync::{Arc, Weak},
+    vec,
+    vec::Vec,
+};
 use core::cell::RefMut;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -59,6 +64,14 @@ impl ProcessControlBlock {
                     parent: None,
                     children: Vec::new(),
                     exit_code: 0,
+                    fd_table: vec![
+                        //stdin
+                        Some(Arc::new(Stdin)),
+                        //stdout
+                        Some(Arc::new(Stdout)),
+                        //stderr
+                        Some(Arc::new(Stdout)),
+                    ],
                 })
             },
         };
@@ -123,6 +136,14 @@ impl ProcessControlBlock {
                     parent: Some(Arc::downgrade(self)),
                     children: Vec::new(),
                     exit_code: 0,
+                    fd_table: vec![
+                        //stdin
+                        Some(Arc::new(Stdin)),
+                        //stdout
+                        Some(Arc::new(Stdout)),
+                        //stderr
+                        Some(Arc::new(Stdout)),
+                    ],
                 })
             },
         });
@@ -150,6 +171,7 @@ pub struct ProcessControlBlockInner {
     pub parent: Option<Weak<ProcessControlBlock>>,
     pub children: Vec<Arc<ProcessControlBlock>>,
     pub exit_code: i32,
+    pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
 }
 
 impl ProcessControlBlockInner {
@@ -170,5 +192,13 @@ impl ProcessControlBlockInner {
     }
     pub fn set_task_status(&mut self, status: TaskStatus) {
         self.task_status = status;
+    }
+    pub fn alloc_fd(&mut self) -> usize {
+        if let Some(fd) = (0..self.fd_table.len()).find(|fd| self.fd_table[*fd].is_none()) {
+            fd
+        } else {
+            self.fd_table.push(None);
+            self.fd_table.len() - 1
+        }
     }
 }
