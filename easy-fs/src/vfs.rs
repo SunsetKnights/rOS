@@ -2,7 +2,7 @@ use alloc::{string::String, sync::Arc, vec::Vec};
 use spin::{Mutex, MutexGuard};
 
 use crate::{
-    block_cache::get_block_cache,
+    block_cache::{get_block_cache, sync_all_block},
     block_dev::BlockDevice,
     efs::EasyFileSystem,
     layout::{DirEntry, DiskInode, DiskInodeType},
@@ -156,6 +156,7 @@ impl Inode {
                 &self.block_device,
             );
         });
+        sync_all_block();
         let result = Self::new(
             new_inode_block_id,
             new_block_offset,
@@ -187,6 +188,7 @@ impl Inode {
                 fs.dealloc_data(block);
             }
         });
+        sync_all_block();
     }
 
     pub fn read_at(&self, offset: usize, buffer: &mut [u8]) -> usize {
@@ -196,10 +198,12 @@ impl Inode {
 
     pub fn write_at(&self, offset: usize, buffer: &[u8]) -> usize {
         let mut fs = self.fs.lock();
-        self.modify_disk_inode(|disk_inode| {
+        let write_size = self.modify_disk_inode(|disk_inode| {
             self.increase_size((offset + buffer.len()) as u32, disk_inode, &mut fs);
             disk_inode.write_at(offset, buffer, &self.block_device)
-        })
+        });
+        sync_all_block();
+        write_size
     }
 
     /// Get all file names in the current folder.

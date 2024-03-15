@@ -110,7 +110,7 @@ impl BlockCacheManager {
 }
 
 lazy_static! {
-    pub static ref BLOCK_CACHE_MAMAGER: Mutex<BlockCacheManager> =
+    pub static ref BLOCK_CACHE_MANAGER: Mutex<BlockCacheManager> =
         Mutex::new(BlockCacheManager::new());
 }
 
@@ -118,7 +118,14 @@ pub fn get_block_cache(
     block_id: usize,
     block_device: Arc<dyn BlockDevice>,
 ) -> Arc<Mutex<BlockCache>> {
-    BLOCK_CACHE_MAMAGER
+    BLOCK_CACHE_MANAGER
         .lock()
         .get_block_cache(block_id, block_device)
+}
+
+pub fn sync_all_block() {
+    let cache_manager = BLOCK_CACHE_MANAGER.lock();
+    for (_, cache) in cache_manager.queue.iter() {
+        cache.lock().sync();
+    }
 }

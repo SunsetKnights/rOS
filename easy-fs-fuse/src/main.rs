@@ -70,43 +70,38 @@ fn easy_fs_pack() -> std::io::Result<()> {
         // load app data from host file system
         let mut host_file = File::open(format!("{}{}", target_path, app)).unwrap();
         let mut all_data: Vec<u8> = Vec::new();
-        let read_size = host_file.read_to_end(&mut all_data).unwrap();
+        host_file.read_to_end(&mut all_data).unwrap();
         // create a file in easy-fs
         let inode = root_inode.create_file(app.as_str()).unwrap();
         // write data to easy-fs
-        let write_size = inode.write_at(0, all_data.as_slice());
+        inode.write_at(0, all_data.as_slice());
     }
-
+    
     // check whether the file was written successfully and print the file information
-    drop(efs);
-    let efs = EasyFileSystem::open(block_file);
-    let root = EasyFileSystem::root_inode(&efs);
-    for app in root.list() {
-        // read app data from efs.
-        let app_inode = root.find(&app).unwrap();
-        let app_size = app_inode.len();
-        let (block_id, offset) = app_inode.device_position();
-        let mut vec_data = vec![0; app_size as usize];
-        let efs_data = vec_data.as_mut_slice();
-        app_inode.read_at(0, efs_data);
-        // read app data from host file system.
-        let mut host_file = File::open(format!("{}{}", target_path, app)).unwrap();
-        let mut host_fs_data: Vec<u8> = Vec::new();
-        host_file.read_to_end(&mut host_fs_data).unwrap();
-        // compare
-        if efs_data == host_fs_data.as_slice() {
-            println!(
-                "App {app} pack successful, size = {app_size}, position in device is ({block_id}, {offset})."
-            );
-        } else {
-            println!("App {app} pack faild.");
-        }
-    }
+    //let efs = EasyFileSystem::open(block_file);
+    //let root = EasyFileSystem::root_inode(&efs);
+    //for app in root.list() {
+    //    // read app data from efs.
+    //    let app_inode = root.find(&app).unwrap();
+    //    let app_size = app_inode.len();
+    //    let (block_id, offset) = app_inode.device_position();
+    //    let mut vec_data = vec![0; app_size as usize];
+    //    let efs_data = vec_data.as_mut_slice();
+    //    app_inode.read_at(0, efs_data);
+    //    // read app data from host file system.
+    //    let mut host_file = File::open(format!("{}{}", target_path, app)).unwrap();
+    //    let mut host_fs_data: Vec<u8> = Vec::new();
+    //    host_file.read_to_end(&mut host_fs_data).unwrap();
+    //    // compare
+    //    if efs_data == host_fs_data.as_slice() {
+    //        println!(
+    //            "App {app} pack successful, size = {app_size}, position in device is ({block_id}, {offset})."
+    //        );
+    //    } else {
+    //        println!("App {app} pack faild.");
+    //    }
+    //}
 
-    // list apps
-    // for app in root_inode.ls() {
-    //     println!("{}", app);
-    // }
     Ok(())
 }
 
