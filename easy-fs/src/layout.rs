@@ -212,7 +212,7 @@ impl DiskInode {
                                     && inner_idx < INODE_INDIRECT_1_COUNT
                                 {
                                     // Alloc data block
-                                    indirect_1_block[indirect_1_idx] = new_blocks.next().unwrap();
+                                    indirect_1_block[inner_idx] = new_blocks.next().unwrap();
                                     inner_idx += 1;
                                     current_block += 1;
                                 }
@@ -315,30 +315,32 @@ impl DiskInode {
         if end <= start {
             return 0;
         }
+        let expect_size = end - start;
         let mut read_size = 0;
         let mut buffer_offset = 0;
+        let mut inode_block = start / BLOCK_SIZE;
         loop {
-            let curr_block = start / BLOCK_SIZE;
-            let inner_start = start % BLOCK_SIZE;
-            let inner_end = match start + BLOCK_SIZE > end {
+            start %= BLOCK_SIZE;
+            let inner_end = match (inode_block + 1) * BLOCK_SIZE > end {
                 true => end % BLOCK_SIZE,
                 false => BLOCK_SIZE,
             };
-            let curr_len = inner_end - inner_start;
+            let curr_len = inner_end - start;
             get_block_cache(
-                self.get_block_id(curr_block as u32, block_device) as usize,
+                self.get_block_id(inode_block as u32, block_device) as usize,
                 Arc::clone(block_device),
             )
             .lock()
             .read(0, |data_block: &DataBlock| {
-                let src = data_block[inner_start..inner_end].as_ptr();
+                let src = data_block[start..inner_end].as_ptr();
                 let dst = buffer[buffer_offset..buffer_offset + curr_len].as_mut_ptr();
                 unsafe { dst.copy_from(src, curr_len) };
             });
             read_size += curr_len;
             buffer_offset += curr_len;
             start += curr_len;
-            if start == end {
+            inode_block += 1;
+            if read_size == expect_size {
                 break;
             }
         }
@@ -368,30 +370,32 @@ impl DiskInode {
         if end <= start {
             return 0;
         }
+        let expect_size = end - start;
         let mut write_size = 0;
         let mut buffer_offset = 0;
+        let mut inode_block = start / BLOCK_SIZE;
         loop {
-            let curr_block = start / BLOCK_SIZE;
-            let inner_start = start % BLOCK_SIZE;
-            let inner_end = match start + BLOCK_SIZE > end {
+            start %= BLOCK_SIZE;
+            let inner_end = match (inode_block + 1) * BLOCK_SIZE > end {
                 true => end % BLOCK_SIZE,
                 false => BLOCK_SIZE,
             };
-            let curr_len = inner_end - inner_start;
+            let curr_len = inner_end - start;
             get_block_cache(
-                self.get_block_id(curr_block as u32, block_device) as usize,
+                self.get_block_id(inode_block as u32, block_device) as usize,
                 Arc::clone(block_device),
             )
             .lock()
             .modify(0, |data_block: &mut DataBlock| {
                 let src = buffer[buffer_offset..buffer_offset + curr_len].as_ptr();
-                let dst = data_block[inner_start..inner_end].as_mut_ptr();
+                let dst = data_block[start..inner_end].as_mut_ptr();
                 unsafe { dst.copy_from(src, curr_len) };
             });
             write_size += curr_len;
             buffer_offset += curr_len;
             start += curr_len;
-            if start == end {
+            inode_block += 1;
+            if write_size == expect_size {
                 break;
             }
         }

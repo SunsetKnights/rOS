@@ -68,7 +68,7 @@ impl Bitmap {
         .lock()
         .modify(0, |bitmap_block: &mut BitmapBlock| {
             assert!(bitmap_block[bitmap_position] & (1 << inner_position) > 0);
-            bitmap_block[bit_position] &= !(1 << inner_position);
+            bitmap_block[bitmap_position] &= !(1 << inner_position);
         })
     }
 
