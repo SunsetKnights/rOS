@@ -6,8 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-riscv = { git = "https://github.com/rcore-os/riscv", features = ["inline-asm"] } 
+riscv = { git = "https://github.com/rcore-os/riscv", features = ["inline-asm"] }
+virtio-drivers = { git = "https://github.com/rcore-os/virtio-drivers", rev = "4ee80e5" }
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
 buddy_system_allocator = "0.9"
 bitflags = "2.4.1"
 xmas-elf = "0.9.1"
+easy-fs = { path = "../easy-fs" }
