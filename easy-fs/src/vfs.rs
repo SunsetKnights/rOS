@@ -48,7 +48,7 @@ impl Inode {
     /// # Parameter
     /// * 'name' - File or directory name.
     /// * 'disk_inode' - A Directory inode.
-    pub fn find_inode_id(&self, name: &str, disk_inode: &DiskInode) -> Option<u32> {
+    fn find_inode_id(&self, name: &str, disk_inode: &DiskInode) -> Option<u32> {
         assert!(disk_inode.is_directory(), "disk_inode must be directory.");
         let mut dir_entry = DirEntry::empty();
         for i in 0..disk_inode.size as usize / DIRENTRY_SIZE {
@@ -66,6 +66,23 @@ impl Inode {
             }
         }
         None
+    }
+
+    // Just for debug
+    // pub fn inode_num(&self, file_name: &str) -> Option<u32> {
+    //     let _fs = self.fs.lock();
+    //     self.read_disk_inode(|disk_inode| self.find_inode_id(file_name, disk_inode))
+    // }
+
+    /// Get inode length.
+    pub fn len(&self) -> u32 {
+        let _fs = self.fs.lock();
+        self.read_disk_inode(|disk_inode| disk_inode.size)
+    }
+
+    /// Get inode position in device.
+    pub fn device_position(&self) -> (usize, usize) {
+        (self.block_id, self.block_offset)
     }
 
     /// Get the inode of a file or directory by its name in the current directory inode.
