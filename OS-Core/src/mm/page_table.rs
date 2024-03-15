@@ -204,7 +204,11 @@ impl PageTable {
 /// * 'len' - data length
 /// # Return
 /// * Data slicing of user memory space data in kernel address space
-pub fn translate_byte_buffer(token: usize, user_va: *const u8, len: usize) -> Vec<&'static mut [u8]> {
+pub fn translate_byte_buffer(
+    token: usize,
+    user_va: *const u8,
+    len: usize,
+) -> Vec<&'static mut [u8]> {
     let user_page_table = PageTable::from_token(token);
     let mut start = user_va as usize;
     let end = start + len;
@@ -222,10 +226,63 @@ pub fn translate_byte_buffer(token: usize, user_va: *const u8, len: usize) -> Ve
             ret.push(&mut ppn.get_physical_page_bytes_array()[start_va.page_offset()..]);
         } else {
             ret.push(
-                &mut ppn.get_physical_page_bytes_array()[start_va.page_offset()..end_va.page_offset()],
+                &mut ppn.get_physical_page_bytes_array()
+                    [start_va.page_offset()..end_va.page_offset()],
             );
         }
         start = end_va.into();
     }
     ret
+}
+
+/// Save the physical address of the user space address area.
+pub struct UserBuffer {
+    pub buffers: Vec<&'static mut [u8]>,
+}
+
+impl UserBuffer {
+    pub fn new(buffers: Vec<&'static mut [u8]>) -> Self {
+        Self { buffers }
+    }
+
+    pub fn len(&self) -> usize {
+        let mut length = 0;
+        for slice in &self.buffers {
+            length += slice.len();
+        }
+        length
+    }
+}
+
+impl IntoIterator for UserBuffer {
+    type Item = *mut u8;
+    type IntoIter = UserBufferIterator;
+    fn into_iter(self) -> Self::IntoIter {
+        UserBufferIterator {
+            buffers: self.buffers,
+            curr_buf: 0,
+            inner_idx: 0,
+        }
+    }
+}
+
+pub struct UserBufferIterator {
+    buffers: Vec<&'static mut [u8]>,
+    curr_buf: usize,
+    inner_idx: usize,
+}
+
+impl Iterator for UserBufferIterator {
+    type Item = *mut u8;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.inner_idx == self.buffers[self.curr_buf].len() {
+            if self.curr_buf == self.buffers.len() - 1 {
+                return None;
+            }
+            self.curr_buf += 1;
+            self.inner_idx = 0;
+        }
+        self.inner_idx += 1;
+        Some(&mut self.buffers[self.curr_buf][self.inner_idx - 1] as *mut _)
+    }
 }

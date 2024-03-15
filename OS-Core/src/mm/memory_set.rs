@@ -4,8 +4,9 @@ use super::{
     page_table::{PTEFlags, PageTable, PageTableEntry},
 };
 use crate::{
-    config::{PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT, USABLE_MEMORY_END, USER_STACK_SIZE},
+    config::{PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT, USER_STACK_SIZE},
     mm::address::{PhysAddr, StepByOne},
+    platfrom::{MEMORY_END, MMIO},
     println,
     sync::UPSafeCell,
 };
@@ -351,12 +352,26 @@ impl MemorySet {
         kernel_memory_set.push(
             MapArea::new(
                 (ekernel as usize).into(),
-                USABLE_MEMORY_END.into(),
+                MEMORY_END.into(),
                 MapType::Identical,
                 MapPermission::R | MapPermission::W,
             ),
             None,
         );
+
+        println!("[kernel] mapping memory-mapped registers");
+        for area in MMIO {
+            kernel_memory_set.push(
+                MapArea::new(
+                    (*area).0.into(),
+                    ((*area).0 + (*area).1).into(),
+                    MapType::Identical,
+                    MapPermission::R | MapPermission::W,
+                ),
+                None,
+            )
+        }
+
         kernel_memory_set
     }
     /// Find a page table entry by virtual page number.
@@ -443,4 +458,8 @@ impl Clone for MemorySet {
 lazy_static! {
     pub static ref KERNEL_SPACE: Arc<UPSafeCell<MemorySet>> =
         Arc::new(unsafe { UPSafeCell::new(MemorySet::new_kernel()) });
+}
+
+pub fn kernel_token() -> usize {
+    KERNEL_SPACE.exclusive_access().token()
 }

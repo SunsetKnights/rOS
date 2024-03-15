@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
 
-use crate::{config::USABLE_MEMORY_END, info, mm::address::PhysAddr, sync::UPSafeCell};
+use crate::{info, mm::address::PhysAddr, platfrom::MEMORY_END, sync::UPSafeCell};
 
 use super::address::PhysPageNum;
 
@@ -95,7 +95,7 @@ pub fn frame_allocator_init() {
     }
     FRAME_ALLOCATOR.exclusive_access().init(
         PhysAddr::from(ekernel as usize).ceil(),
-        PhysAddr::from(USABLE_MEMORY_END - 1).floor(),
+        PhysAddr::from(MEMORY_END - 1).floor(),
     );
 }
 
