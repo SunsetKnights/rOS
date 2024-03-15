@@ -36,7 +36,7 @@ pub fn sys_close(fd: usize) -> isize {
     sys_call(SYS_CLOSE, [fd, 0, 0])
 }
 pub fn sys_read(fd: usize, buffer: &mut [u8]) -> isize {
-    sys_call(SYS_READ, [fd, buffer.as_mut_ptr() as usize, 1])
+    sys_call(SYS_READ, [fd, buffer.as_mut_ptr() as usize, buffer.len()])
 }
 pub fn sys_write(fd: usize, buffer: &[u8]) -> isize {
     sys_call(SYS_WRITE, [fd, buffer.as_ptr() as usize, buffer.len()])
