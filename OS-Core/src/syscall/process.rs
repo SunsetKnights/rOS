@@ -1,11 +1,15 @@
+use alloc::vec::Vec;
+
 // process manage mod
 use crate::{
     fs::inode::{open_file, OpenFlags},
     mm::page_table::PageTable,
     task::{
+        action::SignalAction,
         exit_current_and_run_next, get_pid,
         manager::add_task,
         processor::{current_task, current_user_token},
+        signal::{SignalFlags, MAX_SIG},
         suspended_current_and_run_next,
     },
     timer::get_time_ms,
@@ -35,14 +39,24 @@ pub fn sys_fork() -> isize {
     new_pid as isize
 }
 
-pub fn sys_exec(path: *const u8) -> isize {
+pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
     let user_token = current_user_token();
     let path = PageTable::from_token(user_token).translated_str(path);
+    let mut args_vec = Vec::new();
+    loop {
+        let arg_str_ptr = *PageTable::from_token(user_token).translated_ref(args);
+        if arg_str_ptr == 0 {
+            break;
+        }
+        args_vec.push(PageTable::from_token(user_token).translated_str(arg_str_ptr as *const u8));
+        args = unsafe { args.add(1) };
+    }
     if let Some(inode) = open_file(&path, OpenFlags::READ_ONLY) {
+        let argc = args_vec.len();
         let app_data = inode.read_all();
         let pcb = current_task().unwrap();
-        pcb.exec(app_data.as_slice());
-        0
+        pcb.exec(app_data.as_slice(), args_vec);
+        argc as isize
     } else {
         -1
     }
@@ -81,13 +95,64 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
     ret
 }
 
-pub fn sys_spawn(path: *const u8) -> isize {
+pub fn sys_spawn(path: *const u8, mut args: *const usize) -> isize {
     let user_token = current_user_token();
     let path = PageTable::from_token(user_token).translated_str(path);
+    let mut args_vec = Vec::new();
+    loop {
+        let arg_str_ptr = *PageTable::from_token(user_token).translated_ref(args);
+        if arg_str_ptr == 0 {
+            break;
+        }
+        args_vec.push(PageTable::from_token(user_token).translated_str(arg_str_ptr as *const u8));
+        args = unsafe { args.add(1) };
+    }
     if let Some(inode) = open_file(&path, OpenFlags::READ_ONLY) {
         let app_data = inode.read_all();
         let pcb = current_task().unwrap();
-        pcb.spawn(app_data.as_slice()) as isize
+        pcb.spawn(app_data.as_slice(), args_vec) as isize
+    } else {
+        -1
+    }
+}
+
+pub fn sys_sigprocmask(mask: u32) -> isize {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+    let old_mask = inner.signal_mask;
+    if let Some(new_mask) = SignalFlags::from_bits(mask) {
+        inner.signal_mask = new_mask;
+        old_mask.bits() as isize
+    } else {
+        -1
+    }
+}
+
+pub fn sys_sigaction(
+    signum: i32,
+    action: *const SignalAction,
+    old_action: *mut SignalAction,
+) -> isize {
+    let token = current_user_token();
+    let task = current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+    // Faild signal
+    if signum as usize > MAX_SIG {
+        return -1;
+    }
+    if let Some(flag) = SignalFlags::from_bits(1 << signum) {
+        if flag == SignalFlags::SIGKILL
+            || flag == SignalFlags::SIGSTOP
+            || action as usize == 0
+            || old_action as usize == 0
+        {
+            return -1;
+        }
+        let prev_action = inner.signal_actions.table[signum as usize];
+        *PageTable::from_token(token).translated_refmut(old_action) = prev_action;
+        inner.signal_actions.table[signum as usize] =
+            *PageTable::from_token(token).translated_ref(action);
+        0
     } else {
         -1
     }

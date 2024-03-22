@@ -1,7 +1,12 @@
 // File stream mod
 
+use alloc::sync::Arc;
+
 use crate::{
-    fs::inode::{open_file, OpenFlags},
+    fs::{
+        inode::{open_file, OpenFlags},
+        pipe::create_pipe,
+    },
     mm::page_table::{translate_byte_buffer, PageTable, UserBuffer},
     task::processor::{current_task, current_user_token},
 };
@@ -56,8 +61,7 @@ pub fn sys_open(path: *const u8, flags: u32) -> isize {
     let path = PageTable::from_token(token).translated_str(path);
     if let Some(inode) = open_file(&path, OpenFlags::from_bits(flags).unwrap()) {
         let mut inner = task.inner_exclusive_access();
-        let fd = inner.alloc_fd();
-        inner.fd_table[fd] = Some(inode);
+        let fd = inner.open_file(inode);
         fd as isize
     } else {
         -1
@@ -73,4 +77,27 @@ pub fn sys_close(fd: usize) -> isize {
     } else {
         -1
     }
+}
+
+pub fn sys_pipe(pipe: *mut usize) -> isize {
+    let token = current_user_token();
+    let task = current_task().unwrap();
+    let (read_end, write_end) = create_pipe();
+    let mut task_inner = task.inner_exclusive_access();
+    let read_end_fd = task_inner.open_file(read_end);
+    let write_end_fd = task_inner.open_file(write_end);
+    *PageTable::from_token(token).translated_refmut(pipe) = read_end_fd;
+    *PageTable::from_token(token).translated_refmut(unsafe { pipe.add(1) }) = write_end_fd;
+    0
+}
+
+pub fn sys_dup(fd: usize) -> isize {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+    if fd >= inner.fd_table.len() || inner.fd_table[fd].is_none() {
+        return -1;
+    }
+    let fd_clone = Arc::clone(inner.fd_table[fd].as_ref().unwrap());
+    let new_fd = inner.open_file(fd_clone);
+    new_fd as isize
 }
