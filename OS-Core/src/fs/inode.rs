@@ -117,14 +117,6 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
             if flags.contains(OpenFlags::TRUNC) {
                 inode.clear()
             }
-            let (block_id, offset) = inode.device_position();
-            println!(
-                "Size of file {} is {}, positon in device is ({}, {}).",
-                name,
-                inode.len(),
-                block_id,
-                offset
-            );
             Arc::new(OSInode::new(readable, writable, inode))
         })
     }

@@ -1,5 +1,6 @@
 pub mod inode;
 mod stdio;
+pub mod pipe;
 use crate::mm::page_table::UserBuffer;
 pub use stdio::{Stdin, Stdout};
 pub trait File: Send + Sync {
