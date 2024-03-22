@@ -10,7 +10,7 @@ extern crate user_lib;
 fn main() -> i32 {
     // The current process is a child process
     if fork() == 0 {
-        exec("user_shell\0");
+        exec("user_shell\0", &[core::ptr::null::<u8>()]);
     }
     // The current process is the parent process and waits in a loop for all child processes to exit.
     else {
