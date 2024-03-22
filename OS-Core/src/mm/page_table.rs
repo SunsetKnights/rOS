@@ -194,6 +194,11 @@ impl PageTable {
         let va_ptr = va_ptr as usize;
         self.translate_va(VirtAddr::from(va_ptr)).get_mut()
     }
+
+    pub fn translated_ref<T>(&self, va_ptr: *const T) -> &'static T {
+        let va_ptr = va_ptr as usize;
+        self.translate_va(VirtAddr::from(va_ptr)).get_ref()
+    }
 }
 
 /// Read data from user memory set.
