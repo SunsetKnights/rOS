@@ -5,8 +5,9 @@ use crate::{
     println,
     syscall::syscall,
     task::{
-        exit_current_and_run_next,
+        check_current_signals_error, current_add_signal, exit_current_and_run_next, handle_signal,
         processor::{current_trap_context, current_user_token},
+        signal::SignalFlags,
         suspended_current_and_run_next,
     },
     timer::set_next_trigger,
@@ -62,18 +63,22 @@ pub fn trap_handler() {
         }
         Trap::Exception(Exception::StoreFault)
         | Trap::Exception(Exception::StorePageFault)
+        | Trap::Exception(Exception::InstructionFault)
+        | Trap::Exception(Exception::InstructionPageFault)
         | Trap::Exception(Exception::LoadFault)
         | Trap::Exception(Exception::LoadPageFault) => {
-            println!("[kernel] PageFault in application, kernel killed it.");
-            // run next app
-            exit_current_and_run_next(-2);
+            //println!("[kernel] PageFault in application, kernel killed it.");
+            //// run next app
+            //exit_current_and_run_next(-2);
+            current_add_signal(SignalFlags::SIGSEGV);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
-            println!(
-                "[kernel] IllegalInstruction in application, stval is {:#x}, kernel killed it.",
-                stval
-            );
-            exit_current_and_run_next(-3);
+            //println!(
+            //    "[kernel] IllegalInstruction in application, stval is {:#x}, kernel killed it.",
+            //    stval
+            //);
+            //exit_current_and_run_next(-3);
+            current_add_signal(SignalFlags::SIGILL);
         }
         _ => {
             panic!(
@@ -82,6 +87,11 @@ pub fn trap_handler() {
                 stval
             );
         }
+    };
+    handle_signal();
+    if let Some((err_code, err_info)) = check_current_signals_error() {
+        println!("[kernel] {}", err_info);
+        exit_current_and_run_next(err_code);
     }
     trap_return();
 }

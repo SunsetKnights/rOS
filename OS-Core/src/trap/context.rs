@@ -2,6 +2,7 @@ use riscv::register::sstatus::{self, Sstatus, SPP};
 
 // It is necessary to ensure that the memory layout of this structure is consistent with that in trap.S
 #[repr(C)] // this unions means, use C struct memory layout
+#[derive(Clone, Copy)]
 pub struct TrapContext {
     // general purpose register, x[0] is offset 0, x[1] is offset 8...
     pub x: [usize; 32],

@@ -1,13 +1,16 @@
+use core::usize;
+
 use alloc::vec::Vec;
 
 // process manage mod
 use crate::{
     fs::inode::{open_file, OpenFlags},
     mm::page_table::PageTable,
+    println,
     task::{
         action::SignalAction,
         exit_current_and_run_next, get_pid,
-        manager::add_task,
+        manager::{add_task, remove_task, task_from_pid},
         processor::{current_task, current_user_token},
         signal::{SignalFlags, MAX_SIG},
         suspended_current_and_run_next,
@@ -34,7 +37,7 @@ pub fn sys_fork() -> isize {
     let current_pcb = current_task().unwrap();
     let new_pcb = current_pcb.fork();
     new_pcb.inner_exclusive_access().get_trap_context().x[10] = 0;
-    let new_pid = new_pcb.pid.0;
+    let new_pid = new_pcb.get_pid();
     add_task(new_pcb);
     new_pid as isize
 }
@@ -90,7 +93,8 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         }
     }
     if idx != -1 {
-        inner.children.remove(idx as usize);
+        let child_pid = inner.children.remove(idx as usize).get_pid();
+        remove_task(child_pid);
     }
     ret
 }
@@ -129,7 +133,7 @@ pub fn sys_sigprocmask(mask: u32) -> isize {
 }
 
 pub fn sys_sigaction(
-    signum: i32,
+    signum: u32,
     action: *const SignalAction,
     old_action: *mut SignalAction,
 ) -> isize {
@@ -156,6 +160,33 @@ pub fn sys_sigaction(
     } else {
         -1
     }
+}
+
+pub fn sys_kill(pid: usize, signum: u32) -> isize {
+    if let Some(pcb) = task_from_pid(pid) {
+        if let Some(signal) = SignalFlags::from_bits(1 << signum) {
+            let mut inner = pcb.inner_exclusive_access();
+            if inner.signals.contains(signal) {
+                return -1;
+            }
+            inner.signals.insert(signal);
+            0
+        } else {
+            println!("[kernel] Can not general SignalFlags from {}", signum);
+            -1
+        }
+    } else {
+        println!("[kernel] Not found pcb which pid is {}", pid);
+        -1
+    }
+}
+
+pub fn sys_sigreturn() -> isize {
+    let task = current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+    let trap_context = inner.get_trap_context();
+    *trap_context = inner.trap_context_backup.unwrap();
+    trap_context.x[10] as isize
 }
 
 pub fn sys_get_pid() -> isize {

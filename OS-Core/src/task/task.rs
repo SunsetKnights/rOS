@@ -78,6 +78,11 @@ impl ProcessControlBlock {
                     ],
                     signal_mask: SignalFlags::empty(),
                     signal_actions: SignalActions::default(),
+                    signals: SignalFlags::empty(),
+                    frozen: false,
+                    killed: false,
+                    handling_sig: SignalFlags::empty(),
+                    trap_context_backup: None,
                 })
             },
         };
@@ -175,6 +180,11 @@ impl ProcessControlBlock {
                     fd_table,
                     signal_mask: SignalFlags::empty(),
                     signal_actions: SignalActions::default(),
+                    signals: SignalFlags::empty(),
+                    frozen: false,
+                    killed: false,
+                    handling_sig: SignalFlags::empty(),
+                    trap_context_backup: None,
                 })
             },
         });
@@ -254,6 +264,11 @@ impl ProcessControlBlock {
                     fd_table,
                     signal_mask: SignalFlags::empty(),
                     signal_actions: SignalActions::default(),
+                    signals: SignalFlags::empty(),
+                    frozen: false,
+                    killed: false,
+                    handling_sig: SignalFlags::empty(),
+                    trap_context_backup: None,
                 })
             },
         });
@@ -276,6 +291,11 @@ pub struct ProcessControlBlockInner {
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
     pub signal_mask: SignalFlags,
     pub signal_actions: SignalActions,
+    pub signals: SignalFlags,
+    pub frozen: bool,
+    pub killed: bool,
+    pub handling_sig: SignalFlags,
+    pub trap_context_backup: Option<TrapContext>,
 }
 
 impl ProcessControlBlockInner {
