@@ -61,11 +61,11 @@ pub fn sys_exit(xstate: i32) -> isize {
 pub fn sys_yield() -> isize {
     sys_call(SYS_YIELD, [0; 3])
 }
-pub fn sys_kill(pid: usize, signum: i32) -> isize {
+pub fn sys_kill(pid: usize, signum: u32) -> isize {
     sys_call(SYS_KILL, [pid, signum as usize, 0])
 }
 pub fn sys_sigaction(
-    signum: i32,
+    signum: u32,
     action: *const SignalAction,
     old_action: *mut SignalAction,
 ) -> isize {
