@@ -53,7 +53,6 @@ pub extern "C" fn _start(argc: usize, argv: usize) -> ! {
     }
 
     exit(main(argc, args.as_slice())); //return exit code to os
-    panic!("unreachable after sys_exit!");
 }
 
 #[linkage = "weak"]
@@ -106,9 +105,13 @@ pub fn read(fd: usize, buffer: &mut [u8]) -> isize {
 pub fn write(fd: usize, buffer: &[u8]) -> isize {
     sys_write(fd, buffer)
 }
-/// Exit a process
-pub fn exit(xstate: i32) -> isize {
+/// Exit a thread
+pub fn exit(xstate: i32) -> ! {
     sys_exit(xstate)
+}
+/// Sleep
+pub fn sleep(time_ms: usize) -> isize {
+    sys_sleep(time_ms)
 }
 /// yield is the rust key word, so this function named yield_
 pub fn yield_() -> isize {
@@ -180,13 +183,6 @@ pub fn wait_pid(pid: usize, exit_code: &mut i32) -> isize {
 /// * pid - If success
 pub fn spawn(path: &str) -> isize {
     sys_spawn(path)
-}
-
-pub fn sleep(time_ms: usize) {
-    let start = sys_get_time();
-    while sys_get_time() < start + time_ms as isize {
-        sys_yield();
-    }
 }
 
 pub const SIGDEF: u32 = 0; // Default signal handling
@@ -301,4 +297,57 @@ pub fn sigprocmask(mask: u32) -> isize {
 /// Return to process from signal handling function.
 pub fn sigreturn() -> isize {
     sys_sigreturn()
+}
+
+pub fn thread_create(entry: usize, arg: usize) -> isize {
+    sys_thread_create(entry, arg)
+}
+
+pub fn get_tid() -> isize {
+    sys_get_tid()
+}
+
+pub fn waittid(tid: usize) -> isize {
+    loop {
+        match sys_waittid(tid) {
+            -2 => {
+                yield_();
+            }
+            exit_code => return exit_code,
+        }
+    }
+}
+/// Create a block mutex lock
+pub fn mutex_blocking_create() -> usize {
+    sys_mutex_create(true) as usize
+}
+/// Crate a spin mutex lock
+pub fn mutex_create() -> usize {
+    sys_mutex_create(false) as usize
+}
+pub fn mutex_lock(mutex_id: usize) -> isize {
+    sys_mutex_lock(mutex_id)
+}
+pub fn mutex_unlock(mutex_id: usize) -> isize {
+    sys_mutex_unlock(mutex_id)
+}
+/// Create a semaphore
+pub fn semaphore_create(res_count: usize) -> usize {
+    sys_semaphore_create(res_count) as usize
+}
+pub fn semaphore_up(semaphore_id: usize) -> isize {
+    sys_semaphore_up(semaphore_id)
+}
+pub fn semaphore_down(semaphore_id: usize) -> isize {
+    sys_semaphore_down(semaphore_id)
+}
+/// Condvar
+pub fn condvar_create() -> usize {
+    sys_condvar_create() as usize
+}
+pub fn condvar_signal(condvar_id: usize) -> isize {
+    sys_condvar_signal(condvar_id)
+}
+pub fn condvar_wait(condvar_id: usize, mutex_id: usize) -> isize {
+    sys_condvar_wait(condvar_id, mutex_id)
 }
