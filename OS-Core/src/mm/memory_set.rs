@@ -4,7 +4,7 @@ use super::{
     page_table::{PTEFlags, PageTable, PageTableEntry},
 };
 use crate::{
-    config::{PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT, USER_STACK_SIZE},
+    config::{PAGE_SIZE, TRAMPOLINE},
     mm::address::{PhysAddr, StepByOne},
     platfrom::{MEMORY_END, MMIO},
     println,
@@ -247,31 +247,33 @@ impl MemorySet {
             }
         }
         let max_end_va: VirtAddr = max_end_vpn.into();
-        let mut user_stack_buttom: usize = max_end_va.into();
+        let mut user_stack_base: usize = max_end_va.into();
         // Empty virtual page for guard
-        user_stack_buttom += PAGE_SIZE;
-        let user_stack_top = user_stack_buttom + USER_STACK_SIZE;
-        memory_set.push(
-            MapArea::new(
-                user_stack_buttom.into(),
-                user_stack_top.into(),
-                MapType::Framed,
-                MapPermission::R | MapPermission::W | MapPermission::U,
-            ),
-            None,
-        );
-        memory_set.push(
-            MapArea::new(
-                TRAP_CONTEXT.into(),
-                TRAMPOLINE.into(),
-                MapType::Framed,
-                MapPermission::R | MapPermission::W,
-            ),
-            None,
-        );
+        user_stack_base += PAGE_SIZE;
+
+        // Map user stack and trap context here, but every thread will map stack and trap context now
+        //let user_stack_top = user_stack_base + USER_STACK_SIZE;
+        //memory_set.push(
+        //    MapArea::new(
+        //        user_stack_base.into(),
+        //        user_stack_top.into(),
+        //        MapType::Framed,
+        //        MapPermission::R | MapPermission::W | MapPermission::U,
+        //    ),
+        //    None,
+        //);
+        //memory_set.push(
+        //    MapArea::new(
+        //        TRAP_CONTEXT_BASE.into(),
+        //        TRAMPOLINE.into(),
+        //        MapType::Framed,
+        //        MapPermission::R | MapPermission::W,
+        //    ),
+        //    None,
+        //);
         (
             memory_set,
-            user_stack_top,
+            user_stack_base,
             elf_header.pt2.entry_point() as usize,
         )
     }
