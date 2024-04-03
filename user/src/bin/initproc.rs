@@ -3,7 +3,7 @@
 
 use user_lib::{exec, fork, wait, yield_};
 
-#[macro_use]
+// #[macro_use]
 extern crate user_lib;
 
 #[no_mangle]
