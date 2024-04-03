@@ -1,16 +1,16 @@
 mod context;
 use crate::{
-    config::{TRAMPOLINE, TRAP_CONTEXT},
+    config::TRAMPOLINE,
     mm::address::VirtAddr,
     println,
     syscall::syscall,
     task::{
-        check_current_signals_error, current_add_signal, exit_current_and_run_next, handle_signal,
-        processor::{current_trap_context, current_user_token},
+        check_current_signals_error, current_add_signal, exit_current_and_run_next,
+        processor::{current_trap_context, current_trap_context_va, current_user_token},
         signal::SignalFlags,
         suspended_current_and_run_next,
     },
-    timer::set_next_trigger,
+    timer::{check_timer, set_next_trigger},
 };
 pub use context::TrapContext;
 use core::arch::{asm, global_asm};
@@ -50,6 +50,7 @@ pub fn trap_handler() {
     let stval = stval::read();
     match scause.cause() {
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
+            check_timer();
             set_next_trigger();
             suspended_current_and_run_next();
         }
@@ -88,7 +89,6 @@ pub fn trap_handler() {
             );
         }
     };
-    handle_signal();
     if let Some((err_code, err_info)) = check_current_signals_error() {
         println!("[kernel] {}", err_info);
         exit_current_and_run_next(err_code);
@@ -114,7 +114,7 @@ fn set_user_trap_entry() {
 #[no_mangle]
 pub fn trap_return() -> ! {
     set_user_trap_entry();
-    let trap_context_ptr = TRAP_CONTEXT;
+    let trap_context_ptr = current_trap_context_va();
     let user_satp = current_user_token();
     extern "C" {
         fn __restoretrapreg();
