@@ -2,15 +2,16 @@ use crate::{sync::UPSafeCell, trap::TrapContext};
 
 use super::{
     context::TaskContext,
-    manager::{add_task, fetch_task},
+    manager::{add_block_thread, add_ready_thread, fetch_task},
+    process::ProcessControlBlock,
     switch::__switch,
-    task::{ProcessControlBlock, TaskStatus},
+    thread::{ThreadControlBlock, ThreadStatus},
 };
 use alloc::sync::Arc;
 use lazy_static::lazy_static;
 
 pub struct Processor {
-    current: Option<Arc<ProcessControlBlock>>,
+    current: Option<Arc<ThreadControlBlock>>,
     processor_task_context: TaskContext,
 }
 
@@ -22,16 +23,16 @@ impl Processor {
         }
     }
 
-    pub fn take_current(&mut self) -> Option<Arc<ProcessControlBlock>> {
+    pub fn take_current(&mut self) -> Option<Arc<ThreadControlBlock>> {
         self.current.take()
     }
 
-    pub fn set_current(&mut self, pcb: Option<Arc<ProcessControlBlock>>) {
-        self.current = pcb;
+    pub fn set_current(&mut self, tcb: Option<Arc<ThreadControlBlock>>) {
+        self.current = tcb;
     }
 
-    pub fn current(&self) -> Option<Arc<ProcessControlBlock>> {
-        self.current.as_ref().map(|pcb| pcb.clone())
+    pub fn current(&self) -> Option<Arc<ThreadControlBlock>> {
+        self.current.as_ref().map(|tcb| tcb.clone())
     }
 
     pub fn get_processor_task_context(&mut self) -> *mut TaskContext {
@@ -43,26 +44,35 @@ lazy_static! {
     pub static ref PROCESSOR: UPSafeCell<Processor> = unsafe { UPSafeCell::new(Processor::new()) };
 }
 
-pub fn take_current_task() -> Option<Arc<ProcessControlBlock>> {
+/// Take current thread from processor
+pub fn take_current_task() -> Option<Arc<ThreadControlBlock>> {
     PROCESSOR.exclusive_access().take_current()
 }
-
-pub fn current_task() -> Option<Arc<ProcessControlBlock>> {
+/// Get a current tcb copy
+pub fn current_task() -> Option<Arc<ThreadControlBlock>> {
     PROCESSOR.exclusive_access().current()
 }
-
-pub fn current_user_token() -> usize {
-    current_task()
-        .unwrap()
-        .inner_exclusive_access()
-        .get_user_token()
+/// Get current process.
+pub fn current_process() -> Arc<ProcessControlBlock> {
+    current_task().unwrap().process.upgrade().unwrap()
 }
-
+/// Get current user token.
+pub fn current_user_token() -> usize {
+    current_task().unwrap().token()
+}
+/// Get the phsical address of trap context of current thread.
 pub fn current_trap_context() -> &'static mut TrapContext {
     current_task()
         .unwrap()
         .inner_exclusive_access()
-        .get_trap_context()
+        .trap_context()
+}
+/// Get the virtual address of trap context of current thread.
+pub fn current_trap_context_va() -> usize {
+    current_task()
+        .unwrap()
+        .inner_exclusive_access()
+        .trap_context_va()
 }
 
 /// Take out a task from the task scheduling queue,
@@ -70,14 +80,14 @@ pub fn current_trap_context() -> &'static mut TrapContext {
 /// and then switch to the task running.
 pub fn run_tasks() {
     loop {
-        if let Some(pcb) = fetch_task() {
-            let mut next_pcb_inner = pcb.inner_exclusive_access();
-            let next_task = next_pcb_inner.get_task_context();
+        if let Some(tcb) = fetch_task() {
+            let mut next_task_inner = tcb.inner_exclusive_access();
+            let next_task = next_task_inner.task_context_ptr_mut();
             let mut processor = PROCESSOR.exclusive_access();
             let processor_task = processor.get_processor_task_context();
-            next_pcb_inner.set_task_status(TaskStatus::Running);
-            drop(next_pcb_inner);
-            processor.set_current(Some(pcb));
+            next_task_inner.set_status(ThreadStatus::Running);
+            drop(next_task_inner);
+            processor.set_current(Some(tcb));
             drop(processor);
             unsafe { __switch(processor_task, next_task) };
         }
@@ -89,12 +99,29 @@ pub fn run_tasks() {
 /// and then switch to the processor task (run_tasks function).
 pub fn schedule() {
     let curr_task;
-    if let Some(curr_pcb) = take_current_task() {
-        let mut pcb_inner = curr_pcb.inner_exclusive_access();
-        pcb_inner.set_task_status(TaskStatus::Ready);
-        curr_task = pcb_inner.get_task_context();
-        drop(pcb_inner);
-        add_task(curr_pcb);
+    if let Some(curr_tcb) = take_current_task() {
+        let mut tcb_inner = curr_tcb.inner_exclusive_access();
+        tcb_inner.set_status(ThreadStatus::Ready);
+        curr_task = tcb_inner.task_context_ptr_mut();
+        drop(tcb_inner);
+        add_ready_thread(curr_tcb);
+    } else {
+        curr_task = (&mut TaskContext::zero_init()) as *mut TaskContext;
+    }
+    let mut processor = PROCESSOR.exclusive_access();
+    let processor_task = processor.get_processor_task_context();
+    drop(processor);
+    unsafe { __switch(curr_task, processor_task) };
+}
+
+pub fn schedule_block() {
+    let curr_task;
+    if let Some(curr_tcb) = take_current_task() {
+        let mut tcb_inner = curr_tcb.inner_exclusive_access();
+        tcb_inner.set_status(ThreadStatus::Blocked);
+        curr_task = tcb_inner.task_context_ptr_mut();
+        drop(tcb_inner);
+        add_block_thread(curr_tcb);
     } else {
         curr_task = (&mut TaskContext::zero_init()) as *mut TaskContext;
     }
