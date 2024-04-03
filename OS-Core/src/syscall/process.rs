@@ -8,11 +8,10 @@ use crate::{
     mm::page_table::PageTable,
     println,
     task::{
-        action::SignalAction,
         exit_current_and_run_next, get_pid,
-        manager::{add_task, remove_task, task_from_pid},
-        processor::{current_task, current_user_token},
-        signal::{SignalFlags, MAX_SIG},
+        manager::{add_proc, proc_from_pid, remove_proc},
+        processor::{current_process, current_user_token},
+        signal::SignalFlags,
         suspended_current_and_run_next,
     },
     timer::get_time_ms,
@@ -34,11 +33,16 @@ pub fn sys_get_time() -> isize {
 }
 
 pub fn sys_fork() -> isize {
-    let current_pcb = current_task().unwrap();
-    let new_pcb = current_pcb.fork();
-    new_pcb.inner_exclusive_access().get_trap_context().x[10] = 0;
-    let new_pid = new_pcb.get_pid();
-    add_task(new_pcb);
+    let curr_proc = current_process();
+    let new_proc = curr_proc.fork();
+    new_proc
+        .inner_exclusive_access()
+        .get_thread(0)
+        .inner_exclusive_access()
+        .trap_context()
+        .x[10] = 0;
+    let new_pid = new_proc.pid();
+    add_proc(new_proc);
     new_pid as isize
 }
 
@@ -57,8 +61,8 @@ pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
     if let Some(inode) = open_file(&path, OpenFlags::READ_ONLY) {
         let argc = args_vec.len();
         let app_data = inode.read_all();
-        let pcb = current_task().unwrap();
-        pcb.exec(app_data.as_slice(), args_vec);
+        let proc = current_process();
+        proc.exec(app_data.as_slice(), args_vec);
         argc as isize
     } else {
         -1
@@ -75,15 +79,15 @@ pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
 /// * -2 - The child process has not exited yet.
 /// * pid - The pid of the child process that was successfully recycled.
 pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
-    let task = current_task().unwrap();
-    let mut inner = task.inner_exclusive_access();
+    let proc = current_process();
+    let mut inner = proc.inner_exclusive_access();
     let mut ret = -1;
     let mut idx = -1;
     for (index, child) in inner.children.iter().enumerate() {
-        if pid == -1 || pid as usize == child.get_pid() {
+        if pid == -1 || pid as usize == child.pid() {
             ret = -2;
-            if child.inner_exclusive_access().is_zombie() {
-                ret = child.get_pid() as isize;
+            if child.inner_exclusive_access().is_zombie {
+                ret = child.pid() as isize;
                 *(PageTable::from_token(inner.memory_set.token())
                     .translated_refmut::<i32>(exit_code_ptr)) =
                     child.inner_exclusive_access().exit_code;
@@ -93,8 +97,8 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         }
     }
     if idx != -1 {
-        let child_pid = inner.children.remove(idx as usize).get_pid();
-        remove_task(child_pid);
+        let child_pid = inner.children.remove(idx as usize).pid();
+        remove_proc(child_pid);
     }
     ret
 }
@@ -113,57 +117,15 @@ pub fn sys_spawn(path: *const u8, mut args: *const usize) -> isize {
     }
     if let Some(inode) = open_file(&path, OpenFlags::READ_ONLY) {
         let app_data = inode.read_all();
-        let pcb = current_task().unwrap();
-        pcb.spawn(app_data.as_slice(), args_vec) as isize
-    } else {
-        -1
-    }
-}
-
-pub fn sys_sigprocmask(mask: u32) -> isize {
-    let task = current_task().unwrap();
-    let mut inner = task.inner_exclusive_access();
-    let old_mask = inner.signal_mask;
-    if let Some(new_mask) = SignalFlags::from_bits(mask) {
-        inner.signal_mask = new_mask;
-        old_mask.bits() as isize
-    } else {
-        -1
-    }
-}
-
-pub fn sys_sigaction(
-    signum: u32,
-    action: *const SignalAction,
-    old_action: *mut SignalAction,
-) -> isize {
-    let token = current_user_token();
-    let task = current_task().unwrap();
-    let mut inner = task.inner_exclusive_access();
-    // Faild signal
-    if signum as usize > MAX_SIG {
-        return -1;
-    }
-    if let Some(flag) = SignalFlags::from_bits(1 << signum) {
-        if flag == SignalFlags::SIGKILL
-            || flag == SignalFlags::SIGSTOP
-            || action as usize == 0
-            || old_action as usize == 0
-        {
-            return -1;
-        }
-        let prev_action = inner.signal_actions.table[signum as usize];
-        *PageTable::from_token(token).translated_refmut(old_action) = prev_action;
-        inner.signal_actions.table[signum as usize] =
-            *PageTable::from_token(token).translated_ref(action);
-        0
+        let proc = current_process();
+        proc.spawn(app_data.as_slice(), args_vec) as isize
     } else {
         -1
     }
 }
 
 pub fn sys_kill(pid: usize, signum: u32) -> isize {
-    if let Some(pcb) = task_from_pid(pid) {
+    if let Some(pcb) = proc_from_pid(pid) {
         if let Some(signal) = SignalFlags::from_bits(1 << signum) {
             let mut inner = pcb.inner_exclusive_access();
             if inner.signals.contains(signal) {
@@ -179,14 +141,6 @@ pub fn sys_kill(pid: usize, signum: u32) -> isize {
         println!("[kernel] Not found pcb which pid is {}", pid);
         -1
     }
-}
-
-pub fn sys_sigreturn() -> isize {
-    let task = current_task().unwrap();
-    let inner = task.inner_exclusive_access();
-    let trap_context = inner.get_trap_context();
-    *trap_context = inner.trap_context_backup.unwrap();
-    trap_context.x[10] as isize
 }
 
 pub fn sys_get_pid() -> isize {
