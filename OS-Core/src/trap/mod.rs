@@ -15,9 +15,8 @@ use crate::{
 pub use context::TrapContext;
 use core::arch::{asm, global_asm};
 use riscv::register::{
-    scause::Interrupt,
-    scause::{self, Exception, Trap},
-    sie, stval, stvec,
+    scause::{self, Exception, Interrupt, Trap},
+    sie, sstatus, stval, stvec,
     utvec::TrapMode,
 };
 
@@ -30,19 +29,46 @@ pub fn init() {
     set_user_trap_entry();
 }
 
-/// enable timer interrupt
+/// Enable timer interrupt
 pub fn enable_timer_interrupt() {
     unsafe {
         sie::set_stimer();
     }
 }
 
-///  Process the trap.
-///  If it is a system call, call the syscall function.
-///  If it is an exception, print the exception information and then execute the next program.
-///
-/// # Parameter
-/// * 'context' - User stack context
+/// Enable S mode interrupt (Kernel interrupt).
+pub fn enable_smode_interrupt() {
+    unsafe { sstatus::set_sie() };
+}
+
+/// Disable S mode interrupt (Kernel interrupt).
+pub fn disable_smode_interrupt() {
+    unsafe { sstatus::clear_sie() };
+}
+
+/// Set the user trap entry to trampoline page.
+fn set_user_trap_entry() {
+    unsafe {
+        stvec::write(TRAMPOLINE, TrapMode::Direct);
+    }
+}
+
+/// Set kernel trap entry (____save_kernel_trap_reg symbol in trampoline page).
+fn set_kernel_trap_entry() {
+    extern "C" {
+        fn __savetrapsreg();
+        fn __save_kernel_trap_reg();
+    }
+    let save_kernel_trap_va =
+        TRAMPOLINE + (__save_kernel_trap_reg as usize - __savetrapsreg as usize);
+    unsafe {
+        stvec::write(save_kernel_trap_va, TrapMode::Direct);
+        sscratch::write(trap_from_kernel as usize);
+    }
+}
+
+/// User trap entry.
+/// Handle trap from user.
 #[no_mangle]
 pub fn trap_handler() {
     set_kernel_trap_entry();
@@ -96,21 +122,7 @@ pub fn trap_handler() {
     trap_return();
 }
 
-fn set_kernel_trap_entry() {
-    unsafe {
-        stvec::write(trap_from_kernel as usize, TrapMode::Direct);
-    }
-}
-#[no_mangle]
-pub fn trap_from_kernel() {
-    panic!("a trap from kernel!");
-}
-
-fn set_user_trap_entry() {
-    unsafe {
-        stvec::write(TRAMPOLINE, TrapMode::Direct);
-    }
-}
+/// Return to user space.
 #[no_mangle]
 pub fn trap_return() -> ! {
     set_user_trap_entry();
@@ -130,4 +142,10 @@ pub fn trap_return() -> ! {
             options(noreturn)
         );
     }
+}
+
+/// Kernel trap entry.
+#[no_mangle]
+pub fn trap_from_kernel() {
+    todo!("handle external trap and timer trap")
 }

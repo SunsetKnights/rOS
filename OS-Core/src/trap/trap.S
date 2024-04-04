@@ -73,3 +73,33 @@ __restoretrapreg:
     # switch to user stack
     ld sp, 2*8(sp)
     sret
+
+__save_kernel_trap_reg:
+    addi sp, sp, -34*8
+    sd x1, 1*8(sp)
+    sd x3, 3*8(sp)
+    .set n, 5
+    .rept 27
+        SAVE_REG %n
+        .set n, n+1
+    .endr
+    csrr t0, sstatus
+    sd t0, 32*8(sp)
+    csrr t0, sepc
+    sd t0, 33*8(sp)
+    csrr t0, sscratch
+    jalr ra, 0(t0)
+__restore_kernel_trap_reg:
+    ld t0, 32*8(sp)
+    csrw sstatus, t0
+    ld t0, 33*8(sp)
+    csrw sepc, t0
+    ld x1, 1*8(sp)
+    ld x3, 3*8(sp)
+    .set n, 5
+    .rept 27
+        LOAD_REG %n
+        .set n, n+1
+    .endr
+    addi sp, sp, 34*8
+    sret
