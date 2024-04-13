@@ -16,7 +16,7 @@ pub use context::TrapContext;
 use core::arch::{asm, global_asm};
 use riscv::register::{
     scause::{self, Exception, Interrupt, Trap},
-    sie, sstatus, stval, stvec,
+    sie, sscratch, sstatus, stval, stvec,
     utvec::TrapMode,
 };
 
